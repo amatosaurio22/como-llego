@@ -153,6 +153,8 @@
   .legend i { display:inline-block; width:9px; height:9px; border-radius:2px; border:1.5px solid var(--ink); margin-right:4px; vertical-align:-1px; }
   .gcell .rm { position:absolute; right:4px; bottom:4px; width:26px; height:26px; border-radius:6px; display:grid; place-items:center; color:var(--ink-2); }
   .gcell .rm:hover { background:var(--ground); }
+  .gcell .meta.walk { margin-top:2px; white-space:nowrap; }
+  .gcell .meta .far { color:#b8300c; font-weight:700; }
   .gcell .rm svg { width:12px; height:12px; }
   .empty { font:500 14px/1.4 var(--px); color:var(--ink-2); margin:0; }
   .credits { margin:0; font:600 12px/1.45 var(--round); color:var(--ink-2); }
@@ -384,6 +386,11 @@
   #lineInput { font-family:var(--ui); color:#000; }
   #lineInput::placeholder { color:#8a8a8a; }
   #status { border-top:1px dotted #808080; }
+  #status:not(:empty)::before { content:""; display:inline-block; width:9px; height:9px; margin:0 7px 1px 1px; vertical-align:middle; border-radius:50%;
+    background:#2fb33c; box-shadow:0 0 0 2px #c4ebc0; animation:status-led 1s steps(1) infinite; }
+  #status.err:not(:empty)::before { background:#d8401a; box-shadow:0 0 0 2px #f6c9b8; animation-duration:.5s; }
+  @keyframes status-led { 50% { background:transparent; box-shadow:0 0 0 2px transparent; } }
+  @media (prefers-reduced-motion: reduce) { #status:not(:empty)::before { animation:none; } }
   .dot { border:1px solid #404040; }
   .dot.on { background:radial-gradient(circle at 35% 30%, #c9ffbf, #2fc32f 55%, #0b7a0b); }
   .btn, .key, .zone, .help .opt, .leaflet-bar a {
@@ -416,6 +423,17 @@
   .modes button[aria-pressed="true"] { position:relative; z-index:1; height:31px; margin-bottom:-1px; color:#000; background:#fcfcfe; font-weight:700;
     box-shadow:inset 0 3px #e68b2c, inset 0 4px #ffc73c; }
   #keypad { padding:9px 6px 6px; margin-top:0 !important; background:#fcfcfe; border:1px solid #919b9c; border-top:0; }
+  .hintbtn { display:flex; align-items:center; justify-content:center; gap:9px; width:100%; min-height:44px; margin-top:7px; padding:5px 12px;
+    color:#fff; text-align:left; border:1px solid #0a246a; border-radius:3px; text-shadow:1px 1px 1px #0a246a;
+    background:linear-gradient(180deg, #3a72d8 0%, #2a62cc 50%, #2156bd 90%, #1a4aa6 100%);
+    box-shadow:inset 0 2px rgba(255,255,255,.35), inset 1px 1px rgba(255,255,255,.45), inset -1px -1px rgba(0,0,0,.25); cursor:pointer; }
+  .hintbtn:hover { filter:brightness(1.1); }
+  .hintbtn:active { background:linear-gradient(180deg, #1a4aa6, #2a62cc); box-shadow:inset 1px 1px 3px rgba(0,0,0,.45); }
+  .hintbtn:focus-visible { outline:1px dotted #fff; outline-offset:-4px; }
+  .hintbtn svg { flex:none; width:26px; height:26px; }
+  .hintbtn span { display:grid; gap:2px; }
+  .hintbtn b { font:italic 700 15px/1.05 var(--title); letter-spacing:.01em; }
+  .hintbtn small { font:400 11.5px/1 var(--ui); color:#fff; }
   .gindex h3 { font:700 13px/1 var(--ui); letter-spacing:0; color:#215dc6; border-bottom:1px solid #b8c7e8; padding-bottom:5px; }
   .gcell { border-radius:3px; border:1px solid #9a9a8a; box-shadow:1px 1px 0 rgba(0,0,0,.18); }
   .gcell .num { font:700 20px/1.1 var(--ui); padding-right:20px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -571,6 +589,7 @@
           <button type="button" data-mode="tren" aria-pressed="false">TREN</button>
         </div>
         <div class="keypad" id="keypad" style="margin-top:9px"></div>
+        <button type="button" id="helpBtn" class="hintbtn"><svg aria-hidden="true"><use href="#d-guide"/></svg><span><b>¿Te trabaste? Pedí una pista</b><small>Cuesta intentos</small></span></button>
       </div>
 
       <div class="gindex">
@@ -605,7 +624,6 @@
   <button type="button" id="homeBtn"><svg><use href="#d-pick"/></svg>Tu zona</button>
   <button type="button" id="dayBtn"><svg><use href="#d-day"/></svg>Desafío diario</button>
   <button type="button" id="pickBtn"><svg><use href="#d-new"/></svg>+ Viajes</button>
-  <button type="button" id="helpBtn"><svg><use href="#d-guide"/></svg>Pistas</button>
   <button type="button" id="optDock" disabled><svg><use href="#d-opt"/></svg>Óptima</button>
   <button type="button" id="rankBtn"><svg><use href="#d-rank"/></svg>Ranking</button>
   <span class="tray"><button type="button" id="muteBtn" aria-pressed="false" aria-label="Silenciar sonidos" title="Silenciar sonidos"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 7.5h3l4-3.5v12l-4-3.5H3z" fill="#fff" stroke="#0b2a6e" stroke-width="1" stroke-linejoin="round"/><g class="on" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"><path d="M12.5 7.5a3.5 3.5 0 0 1 0 5"/><path d="M14.5 5.5a6.3 6.3 0 0 1 0 9"/></g><g class="off" stroke="#e0201c" stroke-width="2.2" stroke-linecap="round"><path d="M12.5 7.5l5 5M17.5 7.5l-5 5"/></g></svg></button><span id="clock" aria-hidden="true"></span></span>
@@ -1360,8 +1378,20 @@ function drawLine(line){
     g.addLayer(L.polyline(p, { color:line.color, weight:big?4:3, opacity:1 }).bindTooltip(line.name, { sticky:true }));
   }
   if (big) for (const st of c.stops) g.addLayer(L.circleMarker(st, { radius:2.6, color:line.color, weight:1.5, fillColor:"#fff", fillOpacity:1, interactive:false }));
+  for (const [k,p] of [["A",game.A],["B",game.B]]){
+    const n=nearestStop(line, p); if (!n) continue;
+    const far=n.d>WALK, tip=`${shortName(line)} · parada más cercana a ${k}: ${fmtDist(n.d)} a pie${far?` (muy lejos: máx. ${WALK} m)`:""}`;
+    if (n.d<=1500) g.addLayer(L.polyline([p, n.stop], { color:far?"#c93a12":"#333", weight:2, opacity:.85, dashArray:"2 5", interactive:false }));
+    g.addLayer(L.circleMarker(n.stop, { radius:6, color:far?"#c93a12":"#111", weight:2, fillColor:line.color, fillOpacity:1 }).bindTooltip(tip));
+  }
   g.addTo(linesLayer); game.layers.set(line.idx, g);
 }
+function nearestStop(line, p){
+  let best=null, bd=Infinity;
+  for (const s of line.stops){ const d=dist(s,p); if (d<bd){ bd=d; best=s; } }
+  return best && { stop:best, d:bd };
+}
+const fmtDist = d => d<1000 ? `${Math.round(d/10)*10} m` : `${(d/1000).toLocaleString("es-AR",{maximumFractionDigits:1})} km`;
 function pathDist(line, p){
   let best=Infinity;
   const xy=q=>[(q[1]-p[1])*111320*COSLAT, (q[0]-p[0])*111320];
@@ -1611,11 +1641,12 @@ function render(){
   $("emptyMsg").hidden=game.thrown.length>0;
   const used=new Set(game.path||[]);
   $("thrown").innerHTML=game.thrown.map(l=>{
-    const st=closestStop(l, game.A).stop || clip(l).stops[0];
     const m=game.marks.get(l.idx)||"r";
+    const walk=k=>{ const n=nearestStop(l, k==="A"?game.A:game.B); return n ? `<span class="${n.d>WALK?"far":""}" title="Parada más cercana a ${k}">${k} ${fmtDist(n.d)}</span>` : ""; };
     return `<div class="gcell ${m}${used.has(l.idx)?" used":""}"><span class="sw" style="background:${l.color}"></span>
       <div class="num${shortName(l).length>5?" long":""}">${shortName(l)}</div>
-      <div class="meta">${kind(l)} · ${st?planoOf(st):""}</div>
+      <div class="meta">${kind(l)}</div>
+      <div class="meta walk">${walk("A")} · ${walk("B")}</div>
       <span class="mark">${MARK[m]}</span>
       <button class="rm" type="button" data-idx="${l.idx}" aria-label="Sacar ${l.name}"><svg><use href="#i-x"/></svg></button></div>`;
   }).join("");
