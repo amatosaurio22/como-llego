@@ -1,0 +1,1878 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#c1e5f4">
+<title>Guiame — ¿cómo llegás de A a B en el AMBA?</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=Caprasimo&family=Comic+Neue:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.1.3/leaflet-maplibre-gl.js"></script>
+<script src="data/rail.js?v=1794927508"></script>
+<script src="data/bus.js?v=1794930467" onerror="window.BUS_DATA=[]"></script>
+<script src="data/places.js?v=1794934288" onerror="window.PLACES_DATA=[]"></script>
+<script src="data/clubes.js?v=1795014774" onerror="window.CLUBES_DATA=[]"></script>
+<style>
+  :root {
+    --ground:#c9d4e8;
+    --win:#f8fafd;
+    --ink:#12235e;
+    --ink-2:#34488c;
+    --block:#f9c698;
+    --tab:#f26b21;
+    --ave:#f4e44a;
+    --grid:#2c5fd0;
+    --teal:#bfe5e2;
+    --b:#c93a12;
+    --px:"Archivo", "Helvetica Neue", Arial, sans-serif;
+    --round:"Archivo", "Helvetica Neue", Arial, sans-serif;
+    --cond:"Archivo", "Helvetica Neue", Arial, sans-serif;
+    --ease:cubic-bezier(.16,1,.3,1);
+  }
+  * { box-sizing:border-box; }
+  html, body { margin:0; height:100%; }
+  body { color:var(--ink); font-family:var(--round); font-weight:500; -webkit-font-smoothing:antialiased;
+    background-color:var(--ground);
+    background-image: radial-gradient(rgba(18,35,94,.16) 1px, transparent 1.2px); background-size:6px 6px; }
+  ::selection { background:var(--ave); color:var(--ink); }
+  button { font:inherit; color:inherit; cursor:pointer; border:none; background:none; padding:0; }
+  :focus-visible { outline:3px solid var(--tab); outline-offset:2px; }
+  #desk { position:fixed; inset:0; display:grid; gap:12px; padding:56px 12px 84px;
+    grid-template-columns: 1fr; grid-template-rows: minmax(36vh,1fr) auto; }
+  #mapWin { grid-row:1; } #consoleWin { grid-row:2; }
+  @media (min-width: 900px) {
+    #desk { grid-template-columns: 392px 1fr; grid-template-rows: 1fr; padding:60px 20px 96px; gap:20px; }
+    #consoleWin { grid-column:1; grid-row:1; }
+    #mapWin { grid-column:2; grid-row:1; }
+  }
+  .win { position:relative; display:flex; flex-direction:column; min-height:0; background:var(--win); border:1.5px solid var(--ink); border-radius:12px;
+    box-shadow: 0 14px 30px rgba(18,35,94,.22), 0 2px 0 rgba(18,35,94,.25); overflow:hidden; }
+  .bar { flex:none; display:flex; align-items:center; gap:10px; height:32px; padding:0 10px; border-bottom:1.5px solid var(--ink); background:#0054e3; }
+  .bar .box { width:18px; height:18px; border:1.5px solid var(--ink); border-radius:4px; display:grid; place-items:center; }
+  .bar .box svg { width:10px; height:10px; }
+  .bar h2 { margin:0 0 0 auto; font:700 15px/1 var(--px); letter-spacing:.02em; }
+  .bar h2 span { color:var(--tab); }
+  .chips { display:flex; gap:3px; }
+  .chips i { width:8px; height:8px; border-radius:2px; display:block; }
+  .chips i:nth-child(1){ background:var(--tab); } .chips i:nth-child(2){ background:var(--ink); } .chips i:nth-child(3){ background:var(--grid); } .chips i:nth-child(4){ background:var(--ave); }
+  .body { flex:1; min-height:0; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:12px; scrollbar-width:thin; scrollbar-color:var(--ink-2) transparent; overscroll-behavior:contain; }
+  @media (max-width: 899px) {
+    #consoleWin { max-height:52vh; }
+    #consoleWin .bar { display:none; }
+    .body { padding:10px; gap:9px; }
+  }
+  .topbar { position:fixed; top:0; left:0; right:0; height:34px; z-index:900; display:flex; justify-content:space-between; pointer-events:none; }
+  .topbar > div { display:flex; pointer-events:auto; }
+  .ttab { display:flex; align-items:center; gap:8px; padding:0 12px; height:34px; background:var(--win); border:1.5px solid var(--ink); border-top:none; font:500 14px/1 var(--px); letter-spacing:.04em; white-space:nowrap; }
+  .ttab + .ttab { border-left:none; }
+  .ttab.logo { height:48px; padding:0 16px 6px 12px; gap:8px; background:#f5d63d; border-radius:0 0 12px 0; font:800 13px/1 var(--cond); letter-spacing:.04em; }
+  .logo svg { display:block; height:42px; width:auto; overflow:visible; margin-top:4px; }
+  .logo text { font:400 30px "Caprasimo", Georgia, serif; letter-spacing:.4px; stroke-linejoin:round; stroke-linecap:round; paint-order:stroke; }
+  #modeTag { color:var(--ink); }
+  @media (max-width: 420px) { .logo svg { height:35px; } .ttab.logo { padding:0 10px 6px 4px; gap:4px; } #modeTag { font-size:12px; } }
+  .topbar > div:last-child .ttab:first-child { border-radius:0 0 0 10px; }
+  .ttab b { display:inline-block; font:700 15px/1 var(--round); }
+  .ttab.pulse b { animation: bump .6s var(--ease); }
+  @keyframes bump { 30% { color:var(--b); transform:scale(1.2); } }
+  button.ttab { cursor:pointer; font:800 16px/1 var(--round); min-width:38px; justify-content:center; }
+  #scoreNow { color:var(--tab); letter-spacing:.05em; font-size:15px; }
+  @media (max-width: 420px) { #triesTab .lbl { display:none; } .ttab { padding:0 9px; } }
+  .ttab.low b { color:#b8300c; }
+  #mapWrap { position:relative; flex:1; min-height:0; background:var(--block); }
+  #map { position:absolute; inset:24px 0 0 26px; background:var(--block); }
+  .leaflet-container { font-family:var(--round); background:var(--block); }
+  .leaflet-control-attribution { background:rgba(248,250,253,.9) !important; color:var(--ink); font:600 11px var(--round); }
+  .leaflet-control-attribution a { color:var(--ink); }
+  .leaflet-bar { border:1.5px solid var(--ink) !important; border-radius:8px !important; overflow:hidden; box-shadow:none !important; }
+  .leaflet-bar a { color:var(--ink) !important; background:var(--win) !important; border-bottom:1.5px solid var(--ink) !important; font-family:var(--round); }
+  .leaflet-tooltip { font-family:var(--round); font-weight:600; color:var(--ink); border:1.5px solid var(--ink); border-radius:8px; box-shadow:3px 3px 0 var(--ink); }
+  @media (max-width: 899px) {
+    .leaflet-control-zoom { display:none; }
+    .leaflet-control-attribution { font-size:10px; max-width:88%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  }
+  .ruler { position:absolute; z-index:500; background:var(--ink); overflow:hidden; pointer-events:none; }
+  .ruler-x { left:0; right:0; top:0; height:24px; }
+  .ruler-y { left:0; top:24px; bottom:0; width:26px; }
+  .ruler span { position:absolute; min-width:22px; height:18px; padding:0 4px; border-radius:5px; display:grid; place-items:center;
+    background:var(--tab); color:#111; font:900 12px/1 var(--round); transform:translate(-50%,-50%); }
+  .ruler-x span { top:12px; } .ruler-y span { left:13px; }
+  .pin { width:34px; height:34px; border-radius:50% 50% 50% 0; transform:rotate(-45deg); display:grid; place-items:center; border:2px solid #fff; box-shadow:0 0 0 1.5px var(--ink); }
+  .pin span { transform:rotate(45deg); color:#fff; font:700 16px/1 Arial, Helvetica, sans-serif; }
+  .cellpick, .cellpick .leaflet-interactive { cursor:crosshair !important; }
+  .trip { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .tstop { display:flex; align-items:center; gap:8px; min-width:0; padding:6px 8px; border:1.5px solid var(--ink); border-radius:9px; background:#fff; }
+  .tag { flex:none; width:24px; height:24px; border-radius:50%; display:grid; place-items:center; color:#fff; font:700 13px/1 var(--round); }
+  .tag.a { background:var(--ink); } .tag.b { background:var(--b); }
+  .tstop div { min-width:0; }
+  .tstop b { display:block; font-size:14px; line-height:1.15; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .tstop small { display:block; font:500 12px/1.1 var(--px); color:var(--ink-2); }
+  .dot { width:10px; height:10px; border-radius:50%; border:1.5px solid var(--ink); flex:none; margin-left:auto; transition: background .3s; }
+  .dot.on { background:#4bd16b; } .dot.blink { animation: blink .8s steps(2) infinite; }
+  @keyframes blink { 50% { opacity:.25; } }
+  .display { border:1.5px solid var(--ink); border-radius:10px; background:#fff; padding:8px 12px 10px; box-shadow: inset 0 2px 0 rgba(18,35,94,.08); }
+  .entry { display:flex; align-items:baseline; gap:8px; }
+  .entry label { font:500 14px/1 var(--px); color:var(--ink-2); }
+  #lineInput { flex:1; min-width:0; border:none; background:transparent; padding:0; outline:none; color:var(--ink); caret-color:var(--tab);
+    font:700 32px/1.05 var(--round); text-transform:uppercase; }
+  #lineInput::placeholder { color:#5f6fa3; }
+  #match { font:500 15px/1.2 var(--px); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-height:1.2em; }
+  #status { font:500 15px/1.25 var(--px); min-height:2.5em; margin-top:6px; padding-top:6px; border-top:1.5px dashed rgba(18,35,94,.35); }
+  #status.err { color:#b8300c; animation: blink .45s steps(2) 3; }
+  @media (max-width: 899px) { #status { min-height:1.25em; } #lineInput { font-size:32px; } }
+  .modes { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; padding:5px; border-radius:10px; background:var(--ink); }
+  .modes button { height:30px; border-radius:7px; color:#000; font:700 13px/1 var(--px); letter-spacing:.06em; transition: background .2s var(--ease), color .2s; }
+  .modes button[aria-pressed="true"] { background:var(--tab); color:#111; }
+  .keypad { display:grid; grid-template-columns:repeat(3,1fr); gap:7px; }
+  .key { min-height:46px; border:1.5px solid var(--ink); border-radius:9px; background:#fff; color:var(--ink); font:600 21px/1 var(--round);
+    box-shadow: inset 0 -3px 0 rgba(18,35,94,.14); transition: background .1s, transform .1s var(--ease); }
+  .key:hover { background:#eef3fb; }
+  .key:active { background:var(--teal); transform:translateY(1px); box-shadow:none; }
+  .key.small { font:600 14px/1.05 var(--round); }
+  .key.go { background:var(--tab); color:#111; font:700 16px/1 var(--round); letter-spacing:.06em; }
+  .key.go:active { background:#d95510; }
+  .key svg { width:24px; height:24px; vertical-align:middle; }
+  @media (max-width: 899px) { .key { min-height:42px; } .keypad { gap:6px; } }
+  .gindex h3 { margin:0 0 8px; font:700 14px/1 var(--px); letter-spacing:.04em; display:flex; justify-content:space-between; }
+  .cells { display:grid; grid-template-columns:repeat(auto-fill, minmax(122px,1fr)); gap:10px; padding:0 5px 6px 0; }
+  .gcell { position:relative; background:#fff; border-radius:12px; box-shadow:2px 3px 0 var(--ink); padding:9px 10px 8px; animation: pop .45s var(--ease); }
+  @keyframes pop { from { transform:scale(.9); opacity:0; } }
+  .gcell .num { font:700 21px/1 var(--round); padding-right:20px; }
+  .gcell .meta { font:500 12px/1.2 var(--px); color:var(--ink-2); margin-top:4px; padding-right:22px; }
+  .gcell .sw { position:absolute; right:10px; top:11px; width:14px; height:14px; border-radius:4px; border:1.5px solid var(--ink); }
+  .gcell.g { background:#d7f0c8; } .gcell.o { background:#ffdcb8; } .gcell.r { background:#f6cfc8; }
+  .gcell .mark { display:inline-block; margin-top:5px; padding:2px 6px; border-radius:5px; background:rgba(255,255,255,.7); font:600 11px/1 var(--px); letter-spacing:.04em; }
+  .gcell .mark::before { content:""; display:inline-block; width:8px; height:8px; border-radius:2px; margin-right:5px; vertical-align:-1px; background:var(--m); }
+  .gcell.g .mark { --m:#3fae4f; } .gcell.o .mark { --m:#f26b21; } .gcell.r .mark { --m:#c93a12; }
+  .gcell.used { outline:3px solid var(--ink); outline-offset:-3px; }
+  .legend { display:flex; flex-wrap:wrap; gap:4px 12px; margin:-2px 0 10px; font:500 12px/1.2 var(--px); color:var(--ink-2); }
+  .legend i { display:inline-block; width:9px; height:9px; border-radius:2px; border:1.5px solid var(--ink); margin-right:4px; vertical-align:-1px; }
+  .gcell .rm { position:absolute; right:4px; bottom:4px; width:26px; height:26px; border-radius:6px; display:grid; place-items:center; color:var(--ink-2); }
+  .gcell .rm:hover { background:var(--ground); }
+  .gcell .rm svg { width:12px; height:12px; }
+  .empty { font:500 14px/1.4 var(--px); color:var(--ink-2); margin:0; }
+  .credits { margin:0; font:600 12px/1.45 var(--round); color:var(--ink-2); }
+  .credits a { color:inherit; }
+  .mute-opt { display:inline-flex; align-items:center; gap:6px; font:400 13px/1.2 var(--ui); color:#000; cursor:pointer; }
+  .mute-opt input { width:14px; height:14px; margin:0; accent-color:#316ac5; }
+  .vol-opt { display:inline-flex; align-items:center; gap:6px; margin-left:14px; font:400 13px/1.2 var(--ui); color:#000; }
+  .vol-opt input { width:110px; margin:0; accent-color:#316ac5; }
+  .vol-opt output { min-width:3.2em; font-variant-numeric:tabular-nums; }
+  .dock { position:fixed; left:12px; right:12px; bottom:10px; z-index:900; display:flex; justify-content:center; gap:4px; padding:5px;
+    background:var(--win); border:1.5px solid var(--ink); border-radius:12px; box-shadow:0 10px 24px rgba(18,35,94,.22); margin-bottom:env(safe-area-inset-bottom); }
+  @media (min-width:900px) { .dock { left:50%; right:auto; transform:translateX(-50%); bottom:14px; } }
+  .dock button { width:78px; display:flex; flex-direction:column; align-items:center; gap:2px; padding:3px 2px; border-radius:9px; font:500 12px/1.1 var(--px); }
+  .dock button[disabled] { opacity:.4; cursor:default; background:none; }
+  .dock svg { width:30px; height:30px; }
+  @media (max-width: 420px) { .dock button { width:64px; font-size:11px; } .dock svg { width:27px; height:27px; } }
+  .overlay { position:fixed; inset:0; z-index:1000; display:grid; place-items:center; padding:20px; background:rgba(201,212,232,.6); }
+  .overlay .win { width:min(420px, 100%); max-height:calc(100vh - 120px); }
+  .help .hint { font:500 14px/1.4 var(--px); margin:0; }
+  .help .opts { display:grid; gap:8px; }
+  .help .opt { display:flex; align-items:center; gap:10px; width:100%; text-align:left; padding:10px 12px; border:1.5px solid var(--ink); border-radius:10px; background:#fff; font:600 15px/1.25 var(--round); }
+  .help .opt:hover { background:#eef3fb; } .help .opt[disabled] { opacity:.45; cursor:default; background:#fff; }
+  .help .opt svg { width:22px; height:22px; flex:none; }
+  .help .opt .price { margin-left:auto; font:600 14px/1 var(--round); color:#b8300c; white-space:nowrap; }
+  .answer { display:grid; gap:12px; padding:0 6px 6px 0; }
+  .planocell { background:#fff; border-radius:12px; box-shadow:2px 3px 0 var(--ink); padding:12px 14px; animation: pop .45s var(--ease); }
+  .planocell header { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px; }
+  .planocell header b { font:800 16px/1 var(--cond); font-variation-settings:"wdth" 80; text-transform:uppercase; }
+  .planocell header span { font:500 13px/1 var(--px); color:var(--ink-2); }
+  .planocell p { margin:0; font:600 17px/1.45 var(--round); }
+  .planocell .rails { display:flex; flex-wrap:wrap; gap:5px; margin-top:8px; }
+  .badge { min-width:30px; height:24px; padding:0 6px; border-radius:6px; display:inline-grid; place-items:center; color:#fff; font:700 13px/1 var(--round); background:var(--c); border:1px solid rgba(18,35,94,.5); vertical-align:middle; }
+  .badge.light { color:var(--ink); }
+  .ticket { position:relative; background:#fff; padding:16px 18px 14px; border:1.5px solid var(--ink); border-radius:6px;
+    -webkit-mask: radial-gradient(circle 7px at 0 50%, transparent 98%, #000) left/51% 100% no-repeat, radial-gradient(circle 7px at 100% 50%, transparent 98%, #000) right/51% 100% no-repeat;
+            mask: radial-gradient(circle 7px at 0 50%, transparent 98%, #000) left/51% 100% no-repeat, radial-gradient(circle 7px at 100% 50%, transparent 98%, #000) right/51% 100% no-repeat; }
+  .ticket header { display:flex; justify-content:space-between; align-items:baseline; border-bottom:1.5px dashed rgba(18,35,94,.4); padding-bottom:8px; margin-bottom:10px; }
+  .ticket header strong { font:800 22px/1 var(--cond); font-variation-settings:"wdth" 75; text-transform:uppercase; }
+  .ticket header span { font:500 14px/1 var(--px); }
+  .route { display:flex; flex-wrap:wrap; align-items:center; gap:5px; margin-bottom:12px; }
+  .route .arrow { width:14px; height:14px; }
+  .stats { display:grid; grid-template-columns:1fr auto; gap:3px 12px; margin:0; font:700 14px/1.3 var(--round); }
+  .stats dd { margin:0; text-align:right; font:500 15px/1.3 var(--px); }
+  .stars { display:flex; gap:4px; margin-top:12px; padding-top:12px; border-top:1.5px dashed rgba(18,35,94,.4); }
+  .stars svg { width:30px; height:30px; color:var(--ink); fill:none; }
+  .stars svg.on { fill:var(--tab); }
+  .route .tag { width:28px; height:28px; margin:0 3px; }
+  .route .tag.a { box-shadow:0 0 0 2px #fff, 0 0 0 3.5px var(--ink); } .route .tag.b { box-shadow:0 0 0 2px #fff, 0 0 0 3.5px var(--b); }
+  .zones { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
+  .zone { min-height:42px; padding:4px 6px; border:1.5px solid var(--ink); border-radius:9px; background:#fff; font:600 14px/1.15 var(--round); }
+  .zone:hover { background:#eef3fb; }
+  .hint.small { font-size:12px; color:var(--ink-2); }
+  .sr { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
+  .book-ov { background:rgba(18,35,94,.42); overflow:hidden; }
+  .booklet { width:min(340px, calc(100vw - 40px), calc((100dvh - 130px) * .75 + 18px)); display:flex; flex-direction:column; gap:14px; }
+  .book { position:relative; width:100%; aspect-ratio:3 / 4; perspective:1800px; margin-left:auto; }
+  .leaf { position:absolute; inset:0 0 0 18px; border-radius:4px 12px 12px 4px; transform-origin:left center; transform-style:preserve-3d; backface-visibility:hidden;
+    transition:transform .8s cubic-bezier(.45,.05,.2,1), box-shadow .8s; }
+  .leaf.turned { transform:rotateY(-178deg); pointer-events:none; }
+  .leaf.back { background:#efe7cf; box-shadow:0 18px 40px rgba(18,35,94,.45), 4px 4px 0 #d9ceb0, 7px 7px 0 #c9bd9c; }
+  .leaf.cover { padding:0; border:0; overflow:hidden; cursor:pointer; background:#1679d8; box-shadow:0 18px 40px rgba(18,35,94,.5), inset -2px 0 0 rgba(255,255,255,.4); }
+  .cover-art { display:block; width:100%; height:100%; }
+  .leaf.cover:hover .cover-art { filter:saturate(1.08) brightness(1.03); }
+  .leaf.cover:focus-visible { outline:3px solid var(--ave); outline-offset:4px; }
+  .leaf.page { display:flex; flex-direction:column; justify-content:center; gap:10px; padding:14px 20px 14px 30px; color:#000; background:#fff;
+    box-shadow:inset 10px 0 14px -10px rgba(0,0,0,.3), 1px 1px 0 #d8d8d8; }
+  .leaf.page.turned { box-shadow:inset -30px 0 30px -20px rgba(0,0,0,.35); }
+  .wordart { display:block; width:100%; height:auto; overflow:visible; flex:none; }
+  .leaf.page .lead { margin:0; font:400 17px/1.4 "Times New Roman", Times, Georgia, serif; text-align:justify; hyphens:auto; }
+  .leaf.page .lead::first-letter { float:left; margin:3px 6px 0 0; font:700 50px/.8 "Times New Roman", Times, serif; color:#1b3fbf; }
+  .clip { margin:2px 0 0; flex:none; }
+  .clip .art { margin:0 !important; border-radius:0 !important; border:1px solid #000 !important; height:clamp(64px, 14vh, 110px) !important; }
+  .clip figcaption { margin-top:4px; font:italic 400 12.5px/1.2 "Times New Roman", Times, serif; color:#333; }
+  .pg-tab { position:absolute; right:-14px; top:calc(40px + var(--k) * 44px); width:14px; height:38px; border-radius:0 6px 6px 0; background:var(--tab); color:#111;
+    display:grid; place-items:center; font:700 10px/1 var(--round); font-style:normal; border:1.5px solid var(--ink); border-left:0; }
+  .pg-tab[style*="--k:1"] { background:var(--ave); } .pg-tab[style*="--k:2"] { background:#7fc3ee; } .pg-tab[style*="--k:3"] { background:#9fd36b; }
+  .spiral { position:absolute; left:0; top:10px; bottom:10px; width:30px; z-index:20; pointer-events:none;
+    background:
+      radial-gradient(circle at 25px 50%, #0b1230 2.6px, transparent 3px) 0 0 / 30px 16px repeat-y,
+      radial-gradient(ellipse 14px 4.2px at 15px 50%, transparent 9.5px, #3a4256 10px, #e7ecf5 11.2px, #8d97ad 12.6px, transparent 13.2px) 0 0 / 30px 16px repeat-y; }
+  .leaf.page .art { display:flex; align-items:center; justify-content:center; gap:12px; height:clamp(80px, 22vh, 150px); flex:none; margin-bottom:16px; border-radius:10px; background:var(--block); border:1.5px solid var(--ink); }
+  .leaf.page .art .tag { width:34px; height:34px; font-size:16px; }
+  .leaf.page .art .dash { width:90px; height:4px; background:radial-gradient(circle, var(--ink) 1.6px, transparent 1.8px) 0 50% / 8px 4px repeat-x; }
+  .leaf.page .key-demo { min-width:54px; height:40px; padding:0 12px; display:grid; place-items:center; border:1.5px solid var(--ink); border-radius:9px; background:#fff; font:700 20px/1 var(--round); }
+  .leaf.page .key-demo.go { background:var(--tab); font-size:15px; letter-spacing:.06em; }
+  .leaf.page .sq { width:30px; height:30px; border-radius:7px; border:1.5px solid var(--ink); }
+  .leaf.page .sq.g { background:#3fae4f; } .leaf.page .sq.o { background:#f26b21; } .leaf.page .sq.r { background:#c93a12; }
+  .leaf.page .art .stars { margin:0; padding:0; border:0; } .leaf.page .art .stars svg { width:26px; height:26px; }
+  .booklet .tuto-nav { background:var(--win); border:1.5px solid var(--ink); border-radius:12px; padding:8px; }
+  @media (max-height: 640px) { .leaf.page .lead { font-size:15px; } .clip .art { height:56px !important; } }
+  .tuto-nav { display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:10px; margin-top:4px; }
+  .pips { display:flex; gap:6px; } .pips i { width:8px; height:8px; border-radius:50%; background:rgba(18,35,94,.25); } .pips i.on { background:var(--ink); }
+  .verdict { margin:8px 0 0; font:500 15px/1.35 var(--round); }
+  .trail { display:flex; gap:4px; margin:10px 0 0; } .trail i { width:18px; height:18px; border-radius:4px; border:1.5px solid var(--ink); }
+  .trail .g { background:#3fae4f; } .trail .o { background:#f26b21; } .trail .r { background:#c93a12; } .trail .h { background:var(--teal); }
+  .btn.wide { grid-column:1 / -1; }
+  .row { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .btn { min-height:44px; padding:0 12px; border:1.5px solid var(--ink); border-radius:9px; background:#fff; font:600 15px/1 var(--round); display:flex; align-items:center; justify-content:center; gap:7px; box-shadow:inset 0 -2px 0 rgba(18,35,94,.12); }
+  .btn:active { background:var(--teal); }
+  .btn.hot { background:var(--tab); color:#111; }
+  .btn svg { width:20px; height:20px; }
+  .btn[disabled] { opacity:.45; cursor:default; }
+  :root {
+    --xp-face:#ece9d8;
+    --xp-edge:#003c74;
+    --xp-field:#7f9db9;
+    --xp-blue:#0054e3;
+    --xp-text:#000;
+    --ui:Tahoma, Verdana, "Segoe UI", "DejaVu Sans", sans-serif;
+    --title:"Trebuchet MS", Tahoma, Verdana, sans-serif;
+    --px:var(--ui); --round:var(--ui);
+  }
+  body { font-family:var(--ui); color:var(--xp-text); -webkit-font-smoothing:auto;
+    background:#c1e5f4 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='84' height='84'%3E%3Ctext x='42' y='42' transform='rotate%28-45 42 42%29' text-anchor='middle' dominant-baseline='central' font-family='Arial Black, Arial, sans-serif' font-weight='900' font-size='17' fill='white'%3EGUIAME%3C/text%3E%3C/svg%3E") 0 0 / 84px 84px; }
+  :focus-visible { outline:1px dotted #000; outline-offset:-4px; }
+  .win { background:var(--xp-face); border:3px solid var(--xp-blue); border-top:0; border-radius:8px 8px 0 0; color:var(--xp-text);
+    box-shadow:inset 1px 0 #166aee, inset -1px 0 #001ea0, inset 0 -1px #001ea0, 2px 3px 8px rgba(0,0,0,.35); }
+  .bar { height:30px; padding:0 4px 0 8px; gap:3px; border:0; border-radius:7px 7px 0 0; margin:0 -3px;
+    background:linear-gradient(180deg, #0997ff 0%, #0053ee 8%, #0050ee 40%, #0066ff 88%, #0066ff 93%, #005bff 95%, #003dd7 96%, #003dd7 100%); }
+  .bar h2 { order:0; margin:0 auto 0 0; color:#fff; font:700 14px/1 var(--title); letter-spacing:0; text-shadow:1px 1px #0f1089; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+  .bar h2 span { color:#ffe88a; }
+  .chips { order:1; gap:2px; }
+  .chips i { width:21px; height:21px; border-radius:3px; border:1px solid #fff; position:relative;
+    background:radial-gradient(circle at 90% 90%, #0054e9 0%, #2263d5 55%, #4479e4 70%, #a3bbec 90%, #fff 100%); }
+  .chips i:nth-child(1), .chips i:nth-child(2) { background:radial-gradient(circle at 90% 90%, #0054e9 0%, #2263d5 55%, #4479e4 70%, #a3bbec 90%, #fff 100%); }
+  .chips i:nth-child(3), .chips i:nth-child(4) { display:none; }
+  .chips i:nth-child(1)::after { content:""; position:absolute; left:5px; bottom:4px; width:8px; height:3px; background:#fff; }
+  .chips i:nth-child(2)::after { content:""; position:absolute; inset:4px; border:1px solid #fff; border-top-width:3px; }
+  .bar .box { order:2; width:21px; height:21px; border:1px solid #fff; border-radius:3px; color:#fff; position:relative;
+    background:radial-gradient(circle at 90% 90%, #cc4600 0%, #dc6527 55%, #cd7546 70%, #ffccb2 90%, #fff 100%); }
+  .bar .box svg { width:11px; height:11px; }
+  span.box::before, span.box::after { content:""; position:absolute; left:4px; right:4px; top:50%; height:2px; margin-top:-1px; background:#fff; transform:rotate(45deg); }
+  span.box::after { transform:rotate(-45deg); }
+  button.box:hover { filter:brightness(1.12); }
+  .body { scrollbar-color:#c1d3fb var(--xp-face); }
+  .ttab { background:linear-gradient(180deg, #fbfbf8 0%, #ece9d8 60%, #ddd8c2 100%); border:1px solid #9a9a8a; border-top:0; color:var(--xp-text); font:400 13px/1 var(--ui); letter-spacing:0;
+    box-shadow:inset 1px 0 #fff; }
+  .ttab.logo { background:#f5d63d; border-color:#b89a16; }
+  .ttab b { font:700 15px/1 var(--ui); }
+  #scoreNow { color:#d85f00; }
+  button.ttab { font:700 15px/1 var(--ui); color:var(--xp-blue); }
+  button.ttab:hover { background:linear-gradient(180deg, #fff 0%, #fff3d1 100%); box-shadow:inset 0 0 0 1px #e5a01a; }
+  #modeTag { font:700 12px/1 var(--ui); letter-spacing:0; }
+  .rank { width:min(460px, 100%); }
+  .rank .rtabs { display:flex; gap:2px; padding:6px 8px 0; background:var(--xp-face); border-bottom:1px solid #919b9c; }
+  .rank .rtabs button { flex:1; padding:6px 4px 5px; border:1px solid #919b9c; border-bottom:0; border-radius:3px 3px 0 0; background:linear-gradient(180deg,#fff,#ecebe5); font:400 13px/1 var(--ui); color:#000; }
+  .rank .rtabs button[aria-selected="true"] { background:#fcfcfe; border-top:2px solid #e68b2c; font-weight:700; margin-bottom:-1px; padding-bottom:6px; }
+  .rank .body { max-height:min(62vh, 520px); overflow:auto; display:grid; gap:10px; }
+  .rlist { list-style:none; margin:0; padding:0; border:1px solid #7f9db9; background:#fff; }
+  .rrow { display:flex; align-items:center; gap:9px; padding:6px 9px; border-bottom:1px solid #e3e1d6; font:400 13px/1.2 var(--ui); }
+  .rrow:last-child { border-bottom:0; }
+  .rrow:nth-child(1) .pos { background:#f5c400; } .rrow:nth-child(2) .pos { background:#d4d6dc; } .rrow:nth-child(3) .pos { background:#e0a46a; }
+  .rrow .pos { flex:none; width:22px; height:22px; display:grid; place-items:center; border:1px solid #9a9a8a; border-radius:3px; font:700 12px/1 var(--ui); background:#ecebe5; }
+  .rrow .who { flex:1; min-width:0; display:grid; }
+  .rrow .who b, .rrow .who small { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .rrow .who small { color:#4a4a4a; font-size:11.5px; }
+  .rrow .val { flex:none; font:700 15px/1 var(--ui); color:#000; } .rrow .val small { font-weight:400; font-size:11.5px; color:#4a4a4a; }
+  .rrow.me { background:#fff6c8; box-shadow:inset 3px 0 #316ac5; }
+  .rempty { padding:14px 10px; font:400 13px/1.35 var(--ui); color:#333; }
+  .crest { flex:none; display:inline-block; width:32px; height:32px; background:url("escudos.png") calc(var(--i) * -32px) 0 / auto 32px no-repeat; image-rendering:pixelated; image-rendering:crisp-edges; }
+  .crest.none { background:none; border:1px dashed #b6b4a8; border-radius:4px; }
+  .crest.gen { background:linear-gradient(180deg,#eceae0,#cfccbe); border:2px solid #8a877a; border-radius:3px 3px 50% 50% / 3px 3px 60% 60%; display:inline-grid; place-items:center; font:700 13px/1 var(--ui); color:#55524a; }
+  .clubpick { display:grid; gap:6px; }
+  .clubsel { display:flex; align-items:center; gap:10px; padding:6px 8px; border:1px solid #7f9db9; background:#f6f5ee; }
+  .clubsel > span:not(.crest) { flex:1; display:grid; } .clubsel small { font:400 11px/1.2 var(--ui); color:#4a4a4a; } .clubsel b { font:700 14px/1.2 var(--ui); }
+  .clubsel .btn { padding:4px 10px; font-size:12px; }
+  .clubpick input[type=search] { font:400 14px/1.2 var(--ui); padding:5px 6px; border:1px solid #7f9db9; border-radius:0; }
+  .clubs h4 { margin:8px 4px 4px; font:700 11px/1 var(--ui); text-transform:uppercase; letter-spacing:.04em; color:#0a246a; border-bottom:1px solid #c1d3fb; padding-bottom:3px; }
+  .clubs h4:first-child { margin-top:2px; }
+  .cgrid { display:grid; grid-template-columns:repeat(auto-fill, minmax(84px, 1fr)); gap:4px; }
+  .ficha { display:grid; gap:10px; }
+  .fld { display:grid; gap:4px; margin:0; padding:0; border:0; font:700 12px/1 var(--ui); color:#000; }
+  .fld legend { padding:0; margin-bottom:4px; }
+  .fld input, .fld select { font:400 14px/1.2 var(--ui); padding:5px 6px; border:1px solid #7f9db9; border-radius:0; background:#fff; color:#000; }
+  .clubs { display:block; max-height:300px; overflow:auto; padding:4px; border:1px solid #7f9db9; background:#fff; }
+  .club { display:grid; justify-items:center; gap:3px; padding:5px 2px; border:1px solid transparent; border-radius:3px; background:none; font:400 11px/1.15 var(--ui); color:#000; text-align:center; cursor:pointer; }
+  .club:hover { background:#eef3fb; border-color:#c1d3fb; }
+  .club.on { background:#316ac5; border-color:#0a246a; color:#fff; }
+  .club:focus-visible { outline:1px dotted #000; outline-offset:-3px; }
+  .legs { display:grid; gap:3px; margin-top:10px; padding-top:10px; border-top:1.5px dashed rgba(18,35,94,.4); }
+  .leg { display:flex; align-items:center; gap:8px; font:400 13px/1.25 var(--ui); }
+  .leg .n { flex:none; width:18px; height:18px; display:grid; place-items:center; border-radius:50%; background:#12235e; color:#fff; font:700 11px/1 var(--ui); }
+  .leg .w { flex:1; min-width:0; }
+  .leg b { flex:none; font:700 14px/1 var(--ui); color:#d85f00; }
+  .leg.tot { margin-top:4px; font-weight:700; } .leg.tot b { font-size:16px; }
+  .rank-note { margin:10px 0 0; font:400 13px/1.35 var(--ui); }
+  .rank-join { margin-top:10px; width:100%; justify-content:center; }
+  .ttab.sube { position:relative; overflow:hidden; gap:7px; padding:0 34px 0 11px; text-decoration:none; color:#fff; border-color:#3b3170;
+    background:linear-gradient(180deg, #4f4396 0%, #574aa0 55%, #6152aa 100%); box-shadow:inset 0 1px rgba(255,255,255,.35); font:400 12px/1 var(--ui); }
+  .ttab.sube::after { content:""; position:absolute; top:0; right:0; bottom:0; width:58px; pointer-events:none;
+    background:radial-gradient(circle, #b7d98f 1.7px, transparent 2.1px) 1px 1px/7px 7px;
+    -webkit-mask:linear-gradient(90deg, transparent, #000 85%); mask:linear-gradient(90deg, transparent, #000 85%); }
+  .ttab.sube .led { position:relative; z-index:1; flex:none; width:9px; height:9px; border-radius:50%; background:#679227; box-shadow:0 0 0 2px #b7d98f, 0 0 0 3.5px rgba(183,217,143,.45); animation:sube-led 2.4s steps(1) infinite; }
+  .ttab.sube strong { font:700 14px/1 var(--ui); letter-spacing:.06em; }
+  .ttab.sube small { display:block; margin-top:2px; font:400 10px/1 var(--ui); opacity:.85; }
+  .ttab.sube .t { position:relative; z-index:1; }
+  .ttab.sube:hover { background:linear-gradient(180deg, #5a4da6 0%, #6253b0 55%, #6a5bb6 100%); }
+  .ttab.sube:hover .led { background:#9fd35a; }
+  .ttab.sube:focus-visible { outline:2px solid #b7d98f; outline-offset:-3px; }
+  @keyframes sube-led { 0%,88% { background:#679227; } 90%,100% { background:#c9f08f; } }
+  @media (prefers-reduced-motion: reduce) { .ttab.sube .led { animation:none; } }
+  .subebtn { position:relative; overflow:hidden; display:flex; align-items:center; gap:10px; margin-top:12px; padding:9px 64px 9px 12px; border:1px solid #3b3170; border-radius:6px; text-decoration:none; color:#fff;
+    background:linear-gradient(180deg, #4f4396 0%, #574aa0 55%, #6152aa 100%); box-shadow:inset 0 1px rgba(255,255,255,.35), 0 1px 0 rgba(0,0,0,.15); font:400 12px/1.25 var(--ui); }
+  .subebtn::after { content:""; position:absolute; top:0; right:0; bottom:0; width:90px; pointer-events:none;
+    background:radial-gradient(circle, #b7d98f 2px, transparent 2.5px) 1px 1px/9px 9px;
+    -webkit-mask:linear-gradient(90deg, transparent, #000 85%); mask:linear-gradient(90deg, transparent, #000 85%); }
+  .subebtn > * { position:relative; z-index:1; }
+  .subebtn .led { flex:none; width:11px; height:11px; border-radius:50%; background:#679227; box-shadow:0 0 0 2.5px #b7d98f, 0 0 0 4.5px rgba(183,217,143,.45); animation:sube-led 2.4s steps(1) infinite; }
+  .subebtn strong { display:block; font:700 14px/1.2 var(--ui); }
+  .subebtn small { display:block; margin-top:2px; font-size:11.5px; opacity:.9; }
+  .subebtn:hover { background:linear-gradient(180deg, #5a4da6 0%, #6253b0 55%, #6a5bb6 100%); }
+  .subebtn:hover .led { background:#9fd35a; }
+  .subebtn:focus-visible { outline:2px solid #574aa0; outline-offset:2px; }
+  @media (prefers-reduced-motion: reduce) { .subebtn .led { animation:none; } }
+  @media (max-width: 560px) {
+    .ttab.sube { position:fixed; top:34px; right:0; height:21px; padding:0 30px 0 9px; gap:6px; border-radius:0 0 0 9px; }
+    .ttab.sube small { display:none; } .ttab.sube strong { font-size:12px; } .ttab.sube .led { width:7px; height:7px; }
+    .ttab.sube::after { width:44px; }
+    .topbar > div:last-child .ttab.sube + .ttab { border-radius:0 0 0 10px; }
+  }
+  .tstop, .display { background:#fff; border:1px solid var(--xp-field); border-radius:0; box-shadow:none; }
+  .tstop small, .entry label, .credits, .empty, .legend, .gcell .meta, .help .hint.small { color:#444; }
+  #lineInput { font-family:var(--ui); color:#000; }
+  #lineInput::placeholder { color:#8a8a8a; }
+  #status { border-top:1px dotted #808080; }
+  .dot { border:1px solid #404040; }
+  .dot.on { background:radial-gradient(circle at 35% 30%, #c9ffbf, #2fc32f 55%, #0b7a0b); }
+  .btn, .key, .zone, .help .opt, .leaflet-bar a {
+    border:1px solid var(--xp-edge) !important; border-radius:3px !important; color:#000 !important;
+    background:linear-gradient(180deg, #fff 0%, #f6f5f1 30%, #ecebe3 86%, #d6d0c5 100%) !important;
+    box-shadow:inset -1px -1px #c8c4b4, inset 1px 1px #fff !important; transition:none; }
+  .btn:hover, .key:hover, .zone:hover, .help .opt:hover:not([disabled]) {
+    box-shadow:inset -1px 1px #fff0cf, inset 1px 2px #fdd889, inset -2px 2px #fbc761, inset 2px -2px #e5a01a !important; }
+  .btn:active, .key:active, .zone:active, .help .opt:active {
+    background:linear-gradient(180deg, #cdcac3 0%, #e3e3db 8%, #e5e5de 94%, #f2f2f1 100%) !important; box-shadow:none !important; transform:none; }
+  .key { font:400 22px/1 var(--ui); }
+  .key.small { font:400 13px/1.1 var(--ui); }
+  .key.sub { display:grid; place-items:center; }
+  .sbt { width:32px; height:32px; border-radius:50%; display:grid; place-items:center; background:var(--c); color:#fff; font:700 18px/1 Arial, Helvetica, sans-serif; box-shadow:inset 0 -2px rgba(0,0,0,.18), 0 0 0 1.5px rgba(255,255,255,.9), 0 1px 2px rgba(0,0,0,.35); text-shadow:0 1px 0 rgba(0,0,0,.2); }
+  .help .opt { font:400 15px/1.25 var(--ui); }
+  .help .opt .price { color:#c0392b; font:700 13px/1 var(--ui); }
+  .zone, .btn { font:400 14px/1.15 var(--ui); }
+  .key.go, .btn.hot {
+    color:#fff !important; font:italic 700 17px/1 var(--title) !important; letter-spacing:.02em; text-shadow:1px 1px 1px #1a4a10;
+    border:1px solid #1d5f12 !important;
+    background:linear-gradient(180deg, #8fd47d 0%, #4ba93a 10%, #379c2a 50%, #2d8a20 90%, #237518 100%) !important;
+    box-shadow:inset 1px 1px rgba(255,255,255,.45), inset -1px -1px rgba(0,0,0,.25) !important; }
+  .key.go:hover, .btn.hot:hover { filter:brightness(1.08); }
+  .key.go:active, .btn.hot:active { background:linear-gradient(180deg, #2d8a20, #379c2a) !important; box-shadow:inset 1px 1px 3px rgba(0,0,0,.4) !important; }
+  .btn[disabled], .help .opt[disabled] { color:#aca899 !important; opacity:1; filter:grayscale(1); }
+  .modes { background:none; padding:0 4px; gap:0; border-radius:0; border-bottom:1px solid #919b9c; align-items:end; }
+  .modes button { height:28px; margin-right:-1px; color:#000; border:1px solid #919b9c; border-bottom:0; border-radius:3px 3px 0 0;
+    background:linear-gradient(180deg, #fff 0%, #f3f3ef 60%, #e3e1d5 100%); font:400 13px/1 var(--ui); letter-spacing:0; }
+  .modes button:hover { box-shadow:inset 0 2px #f8b636; }
+  .modes button[aria-pressed="true"] { position:relative; z-index:1; height:31px; margin-bottom:-1px; color:#000; background:#fcfcfe; font-weight:700;
+    box-shadow:inset 0 3px #e68b2c, inset 0 4px #ffc73c; }
+  #keypad { padding:9px 6px 6px; margin-top:0 !important; background:#fcfcfe; border:1px solid #919b9c; border-top:0; }
+  .gindex h3 { font:700 13px/1 var(--ui); letter-spacing:0; color:#215dc6; border-bottom:1px solid #b8c7e8; padding-bottom:5px; }
+  .gcell { border-radius:3px; border:1px solid #9a9a8a; box-shadow:1px 1px 0 rgba(0,0,0,.18); }
+  .gcell .num { font:700 20px/1.1 var(--ui); padding-right:20px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .gcell .num.long { font-size:14px; line-height:20px; }
+  .gcell .mark { border-radius:2px; font:400 11px/1 var(--ui); }
+  .gcell.used { outline:2px solid #316ac5; outline-offset:-2px; }
+  .planocell { border-radius:3px; border:1px solid #9a9a8a; box-shadow:1px 1px 0 rgba(0,0,0,.18); }
+  .planocell header span { font-family:var(--ui); }
+  .planocell p { font:400 16px/1.45 var(--ui); }
+  .ticket { border:1px solid #9a9a8a; border-radius:0; }
+  .stats { font:700 13px/1.35 var(--ui); } .stats dd { font:400 14px/1.35 var(--ui); }
+  .dock { left:0; right:0; bottom:0; border:0; border-radius:0; gap:3px; padding:3px 4px calc(3px + env(safe-area-inset-bottom)); margin:0; justify-content:flex-start;
+    background:linear-gradient(180deg, #1f2f86 0, #3165c4 3%, #3682e5 6%, #4490e6 10%, #3883e5 12%, #2b71e0 15%, #2663da 18%, #235bd6 20%, #2258d5 23%, #2157d6 38%, #245ddb 54%, #2562df 86%, #245fdc 89%, #2158d4 92%, #1d4ec0 95%, #1941a5 98%);
+    box-shadow:0 -1px 0 #0d2a85; }
+  .dock button { flex:1; width:auto; max-width:150px; flex-direction:row; justify-content:center; gap:6px; min-height:44px; padding:2px 8px; color:#fff; border-radius:3px;
+    font:400 13px/1.1 var(--ui); text-shadow:0 1px 1px rgba(0,0,0,.4);
+    background:linear-gradient(180deg, #2f6ce4 0%, #2a63d8 60%, #2459c8 100%); box-shadow:inset 1px 1px rgba(255,255,255,.4), inset 0 2px rgba(120,170,255,.6), inset -1px -1px rgba(0,0,0,.25); }
+  .dock button:hover { background:linear-gradient(180deg, #2d69e0 0%, #2f6ce4 50%, #2a63d8 100%); box-shadow:inset 1px 1px rgba(255,255,255,.6), inset 0 2px rgba(150,190,255,.8); }
+  .dock button[aria-pressed="true"] { background:#1e52b7; box-shadow:inset 1px 1px 2px rgba(0,0,0,.5); }
+  .dock button[disabled] { opacity:.55; }
+  .dock svg { width:26px; height:26px; flex:none; overflow:visible; }
+  .dock .tray { display:none; margin-left:auto; align-self:stretch; align-items:center; padding:0 14px; color:#fff; font:400 13px/1 var(--ui);
+    background:linear-gradient(180deg, #0c59b9 1%, #139ee9 6%, #18b5f2 10%, #139beb 14%, #1290e8 19%, #0d8dea 63%, #0d9ff1 81%, #0f9eed 88%, #119be9 91%, #1392e2 94%, #137ed7 97%, #095bc9 100%);
+    border-left:1px solid #092e71; box-shadow:inset 1px 0 #18bbff; margin-right:-4px; margin-top:-3px; margin-bottom:calc(-3px - env(safe-area-inset-bottom)); }
+  @media (min-width:900px) { .dock { transform:none; left:0; bottom:0; } .dock .tray { display:flex; } #desk { padding-bottom:70px; } }
+  @media (max-width:899px) {
+    #desk { padding-bottom:76px; }
+    .dock { justify-content:space-between; }
+    .dock button { flex-direction:column; gap:1px; min-height:56px; padding:3px 2px; font-size:11px; }
+  }
+  .dock .tray { gap:8px; }
+  #muteBtn { width:auto; max-width:none; flex:none; min-height:0; padding:4px; background:none; box-shadow:none; border-radius:2px; }
+  #muteBtn:hover { background:rgba(255,255,255,.18); }
+  #muteBtn svg { width:20px; height:20px; }
+  #muteBtn .off { display:none; } #muteBtn[aria-pressed="true"] .off { display:inline; } #muteBtn[aria-pressed="true"] .on { display:none; }
+  @media (max-width:899px) { .dock .tray { display:flex; padding:0 8px; } #clock { display:none; } }
+  .scrollwrap { flex:1; min-height:0; display:flex; }
+  .scrollwrap > .body { flex:1; scrollbar-width:none; }
+  .scrollwrap > .body::-webkit-scrollbar { display:none; }
+  .xpscroll { flex:none; width:18px; display:flex; flex-direction:column; background:linear-gradient(90deg, #eeede5, #f7f7f2 50%, #eeede5); border-left:1px solid #d6d3c4; touch-action:none; user-select:none; -webkit-user-select:none; }
+  .xpscroll.off .xs-thumb { display:none; }
+  .xs-btn, .xs-thumb { border:1px solid #b5c8f2; border-radius:3px; color:#4d6185;
+    background:linear-gradient(90deg, #c8d8fd 0%, #dde8fe 40%, #c4d4fb 70%, #b5c8f7 100%); box-shadow:inset 1px 1px #f4f7ff, inset -1px -1px #a3b8ea; }
+  .xs-btn { flex:none; height:18px; display:grid; place-items:center; margin:0 0 0 0; }
+  .xs-btn svg { width:9px; height:9px; }
+  .xs-btn:hover, .xs-thumb:hover { background:linear-gradient(90deg, #d8e4ff 0%, #ebf1ff 40%, #d2dffd 70%, #c4d4fb 100%); }
+  .xs-btn:active, .xs-thumb.drag { background:linear-gradient(90deg, #a9bff3, #bcd0fb 50%, #a9bff3); }
+  .xs-track { position:relative; flex:1; min-height:0; margin:1px 0; }
+  .xs-thumb { position:absolute; left:0; right:0; top:0; min-height:24px; display:grid; place-items:center; }
+  @media (max-width:899px) { .xpscroll { width:22px; } .xs-btn { height:22px; } .xs-thumb { min-height:34px; } }
+  .xs-thumb i { width:7px; height:8px; background:repeating-linear-gradient(180deg, #eef3ff 0 1px, #8aa2d8 1px 2px); }
+  @media (max-width:899px) { #consoleWin { border-top:3px solid var(--xp-blue); border-radius:4px 4px 0 0; } }
+  .overlay { background:rgba(0,0,0,.18); }
+  .booklet .tuto-nav { background:var(--xp-face); border:1px solid #9a9a8a; border-radius:0; box-shadow:2px 3px 8px rgba(0,0,0,.35); }
+  .pips i { border-radius:1px; background:#c8c4b4; } .pips i.on { background:#316ac5; }
+  .leaflet-tooltip { font-family:var(--ui); color:#000; background:#ffffe1; border:1px solid #000; border-radius:0; box-shadow:2px 2px 2px rgba(0,0,0,.3); }
+  .leaflet-bar { border:0 !important; border-radius:3px !important; }
+  .leaflet-control-attribution { font-family:var(--ui); }
+  #mapWrap { background:var(--xp-face); }
+  #map { inset:24px 6px 6px 28px; }
+  .ruler { background:transparent; overflow:visible; }
+  .ruler-y { width:28px; }
+  .ruler-y span { left:14px; }
+  .ruler span { border-radius:2px; border:1px solid #9a3a08; font:700 11px/1 var(--ui); box-shadow:inset 1px 1px rgba(255,255,255,.4); }
+  .map-frame { position:absolute; z-index:600; inset:24px 6px 6px 28px; border:3px solid #1bb7cb; mix-blend-mode:multiply; pointer-events:none; }
+  #mapWin { background:transparent; border:0; border-radius:0; box-shadow:none; overflow:visible; }
+  #mapWin .bar { display:none; }
+  #mapWin #mapWrap { background:transparent; }
+  .leaf.page { --comic:"Comic Sans MS", "Comic Neue", "Chalkboard SE", cursive; box-shadow:inset 8px 0 10px -8px rgba(0,0,0,.25); }
+  .leaf.page .lead { font:400 17px/1.4 var(--comic); text-align:left; hyphens:manual; }
+  .leaf.page .lead b { font-weight:700; }
+  .leaf.page .lead::first-letter { float:none; margin:0; font:inherit; color:inherit; }
+  .clip .art { background:#c1e5f4 !important; border:2px solid #000 !important; }
+  .clip figcaption { font:400 13px/1.2 var(--comic); color:#000; }
+  .leaf.page .key-demo { min-width:56px; height:40px; border:1px solid var(--xp-edge); border-radius:3px; font:400 20px/1 var(--ui); color:#000;
+    background:linear-gradient(180deg, #fff 0%, #f6f5f1 30%, #ecebe3 86%, #d6d0c5 100%); box-shadow:inset -1px -1px #c8c4b4, inset 1px 1px #fff; }
+  .leaf.page .key-demo.go { color:#fff; font:italic 700 16px/1 var(--title); text-shadow:1px 1px 1px #1a4a10; border-color:#1d5f12;
+    background:linear-gradient(180deg, #8fd47d 0%, #4ba93a 10%, #379c2a 50%, #2d8a20 90%, #237518 100%); }
+  .leaf.page .sq { border-radius:0; border:2px solid #000; }
+  .leaf.page .art .tag { border:2px solid #fff; box-shadow:0 0 0 1.5px #000; font-family:Arial, Helvetica, sans-serif; }
+  .leaf.page .art .dash { background:radial-gradient(circle, #000 1.6px, transparent 1.8px) 0 50% / 8px 4px repeat-x; }
+  .leaf.page .stars svg { color:#000; } .leaf.page .stars svg.on { fill:#ffd21e; }
+  [hidden] { display:none !important; }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation:none !important; transition:none !important; } }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <filter id="bisel" x="-5%" y="-10%" width="110%" height="125%" color-interpolation-filters="sRGB">
+    <feGaussianBlur in="SourceAlpha" stdDeviation="1.6" result="b"/>
+    <feDiffuseLighting in="b" surfaceScale="2.6" diffuseConstant="1.05" lighting-color="#ffffff" result="d"><feDistantLight azimuth="225" elevation="38"/></feDiffuseLighting>
+    <feComposite in="d" in2="SourceGraphic" operator="arithmetic" k1=".55" k2="0" k3=".6" k4="0" result="shade"/>
+    <feSpecularLighting in="b" surfaceScale="2.6" specularConstant=".4" specularExponent="20" lighting-color="#ffffff" result="s"><feDistantLight azimuth="225" elevation="42"/></feSpecularLighting>
+    <feComposite in="s" in2="SourceAlpha" operator="in" result="si"/>
+    <feComposite in="shade" in2="si" operator="arithmetic" k1="0" k2="1" k3=".5" k4="0" result="lit"/>
+    <feComposite in="lit" in2="SourceAlpha" operator="in"/>
+  </filter>
+  <symbol id="lgStack" viewBox="-4 0 148 44" overflow="visible"><text id="lgT" x="8" y="33" font-family="Caprasimo, Georgia, serif" font-size="30" letter-spacing=".4" stroke-linejoin="round" stroke-linecap="round">GUIAME</text><use href="#lgT" x="-4" y="5" fill="#12235e" stroke="#12235e" stroke-width="5" opacity=".2" style="filter:blur(1.5px)"/><use href="#lgT" fill="#ffe25a" stroke="#ffe25a" stroke-width="8"/><use href="#lgT" x="-3" y="3" fill="#9c1e11" stroke="#9c1e11" stroke-width="5"/><use href="#lgT" x="-2" y="2" fill="#c22d15" stroke="#c22d15" stroke-width="5"/><use href="#lgT" x="-1" y="1" fill="#d93718" stroke="#d93718" stroke-width="5"/><use href="#lgT" fill="#e8401c" stroke="#e8401c" stroke-width="5"/><use href="#lgT" fill="#fff" stroke="#fff" stroke-width="2"/><use href="#lgT" fill="#2363e6" filter="url(#bisel)"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M9 5h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9l-6-7z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 9.5l5 5M17 9.5l-5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 2.8l2.8 5.9 6.4.8-4.7 4.4 1.2 6.4L12 17.2l-5.7 3.1 1.2-6.4-4.7-4.4 6.4-.8z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></symbol>
+  <linearGradient id="xgRed" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff9a6a"/><stop offset=".5" stop-color="#e5532a"/><stop offset="1" stop-color="#b13310"/></linearGradient>
+  <linearGradient id="xgCream" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fffdf2"/><stop offset="1" stop-color="#e2d6b0"/></linearGradient>
+  <linearGradient id="xgBlue" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8cc0ff"/><stop offset=".45" stop-color="#3a7cf0"/><stop offset="1" stop-color="#173fb0"/></linearGradient>
+  <linearGradient id="xgFold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff7c8"/><stop offset=".55" stop-color="#f7d76a"/><stop offset="1" stop-color="#e2ac2a"/></linearGradient>
+  <linearGradient id="xgFoldB" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f3cf63"/><stop offset="1" stop-color="#c98f17"/></linearGradient>
+  <radialGradient id="xgBulb" cx=".4" cy=".35" r=".7"><stop offset="0" stop-color="#fffde0"/><stop offset=".45" stop-color="#ffe866"/><stop offset="1" stop-color="#f5b301"/></radialGradient>
+  <linearGradient id="xgGreen" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a8e88a"/><stop offset="1" stop-color="#2e9a22"/></linearGradient>
+  <radialGradient id="xgLens" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#ffffff"/><stop offset=".5" stop-color="#cfe8ff"/><stop offset="1" stop-color="#7fb4e8"/></radialGradient>
+  <linearGradient id="xgMetal" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f2f4f8"/><stop offset="1" stop-color="#8a93a6"/></linearGradient>
+  <symbol id="d-pick" viewBox="0 0 32 32"><ellipse cx="16" cy="29" rx="12" ry="2" fill="#000" opacity=".22"/><rect x="7" y="14" width="18" height="14" fill="url(#xgCream)" stroke="#6b5a32" stroke-width="1"/><path d="M2.5 15.5 16 4l13.5 11.5" fill="none" stroke="#7a1d06" stroke-width="4.6" stroke-linejoin="round" stroke-linecap="round"/><path d="M2.5 15.5 16 4l13.5 11.5" fill="none" stroke="url(#xgRed)" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/><rect x="21" y="5" width="3.5" height="6" fill="#b13310" stroke="#7a1d06" stroke-width=".8"/><rect x="13" y="19" width="6" height="9" fill="url(#xgBlue)" stroke="#1d3d8f" stroke-width=".8"/><circle cx="17.6" cy="23.6" r=".7" fill="#ffe25a"/><rect x="9" y="17" width="3.4" height="3.4" fill="#bfe1ff" stroke="#1d3d8f" stroke-width=".7"/><rect x="19.8" y="17" width="3.4" height="3.4" fill="#bfe1ff" stroke="#1d3d8f" stroke-width=".7"/></symbol>
+  <symbol id="d-day" viewBox="0 0 32 32"><rect x="5" y="7" width="23" height="22" rx="2" fill="#000" opacity=".2"/><rect x="4" y="6" width="23" height="22" rx="2" fill="url(#xgCream)" stroke="#4a5670" stroke-width="1"/><path d="M4 8a2 2 0 0 1 2-2h19a2 2 0 0 1 2 2v5H4z" fill="url(#xgRed)" stroke="#7a1d06" stroke-width="1"/><g fill="url(#xgMetal)" stroke="#4a5670" stroke-width=".7"><rect x="8.5" y="3" width="2.4" height="6" rx="1.2"/><rect x="20" y="3" width="2.4" height="6" rx="1.2"/></g><g fill="#c7cbd6"><rect x="7" y="15.5" width="3.5" height="3"/><rect x="11.8" y="15.5" width="3.5" height="3"/><rect x="16.6" y="15.5" width="3.5" height="3"/><rect x="21.4" y="15.5" width="3.5" height="3"/><rect x="7" y="20" width="3.5" height="3"/><rect x="16.6" y="20" width="3.5" height="3"/><rect x="21.4" y="20" width="3.5" height="3"/><rect x="7" y="24.2" width="3.5" height="2.4"/><rect x="11.8" y="24.2" width="3.5" height="2.4"/></g><rect x="11.4" y="19.6" width="4.4" height="3.8" fill="#f26b21" stroke="#9a3a08" stroke-width=".7"/></symbol>
+  <symbol id="d-new" viewBox="0 0 32 32"><ellipse cx="16" cy="29.3" rx="13" ry="1.7" fill="#000" opacity=".2"/><path d="M2.5 8.5a1.5 1.5 0 0 1 1.5-1.5h8l2.5 2.5h13a1.5 1.5 0 0 1 1.5 1.5V27H2.5z" fill="url(#xgFoldB)" stroke="#8a5d08" stroke-width="1"/><path d="M7 5.5h16l2 2v14H7z" fill="#fff" stroke="#8a8a8a" stroke-width=".8"/><path d="M9 16c3-4 6 1 9-3s4-3 5-4" fill="none" stroke="#1bb7cb" stroke-width="1.6" stroke-linecap="round"/><circle cx="9" cy="16" r="1.4" fill="#12235e"/><circle cx="23" cy="9" r="1.4" fill="#e5532a"/><path d="M1.5 13.5a1.5 1.5 0 0 1 1.5-1.5h26a1.5 1.5 0 0 1 1.5 1.7L29 27.5H3z" fill="url(#xgFold)" stroke="#8a5d08" stroke-width="1" stroke-linejoin="round"/><path d="M3.5 14h25" stroke="#fffbe0" stroke-width="1" opacity=".8"/></symbol>
+  <symbol id="d-guide" viewBox="0 0 32 32"><ellipse cx="16" cy="30" rx="7" ry="1.4" fill="#000" opacity=".2"/><path d="M16 2.5a9.5 9.5 0 0 0-5.6 17.2c1.2.9 1.8 2.1 1.8 3.5V24h7.6v-.8c0-1.4.6-2.6 1.8-3.5A9.5 9.5 0 0 0 16 2.5z" fill="url(#xgBulb)" stroke="#8a6a08" stroke-width="1"/><path d="M10.5 9.5a6 6 0 0 1 4-4.3" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" opacity=".9"/><path d="M13.6 23.5v-5l2.4-2.4 2.4 2.4v5" fill="none" stroke="#b8860b" stroke-width=".9"/><rect x="12" y="24" width="8" height="4.6" rx="1.2" fill="url(#xgMetal)" stroke="#4a5670" stroke-width=".9"/><path d="M12.2 25.6h7.6M12.2 27h7.6" stroke="#4a5670" stroke-width=".6"/></symbol>
+  <symbol id="d-opt" viewBox="0 0 32 32"><path d="M4 26c4-1 3-8 8-9s6 3 11-3" fill="none" stroke="#1bb7cb" stroke-width="2" stroke-dasharray="2.5 2" stroke-linecap="round"/><circle cx="4" cy="26" r="2.4" fill="#12235e" stroke="#fff" stroke-width=".8"/><path d="M19.5 18.5l8.5 8.5" stroke="#2a2a2a" stroke-width="5" stroke-linecap="round"/><path d="M19.5 18.5l8.5 8.5" stroke="#6a6a6a" stroke-width="2.4" stroke-linecap="round"/><circle cx="15" cy="13" r="8.5" fill="url(#xgLens)" stroke="url(#xgMetal)" stroke-width="2.6"/><circle cx="15" cy="13" r="9.8" fill="none" stroke="#3c4458" stroke-width=".8"/><circle cx="15" cy="13" r="7.2" fill="none" stroke="#3c4458" stroke-width=".6"/><path d="M10.5 10.5a5.5 5.5 0 0 1 4-3" stroke="#fff" stroke-width="1.6" stroke-linecap="round" fill="none"/><circle cx="18" cy="12" r="2" fill="#e5532a" stroke="#7a1d06" stroke-width=".7"/></symbol>
+  <linearGradient id="xgGold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff6c2"/><stop offset=".4" stop-color="#ffd23a"/><stop offset="1" stop-color="#c98a00"/></linearGradient>
+  <symbol id="d-rank" viewBox="0 0 32 32"><ellipse cx="16" cy="29.6" rx="9" ry="1.5" fill="#000" opacity=".2"/><path d="M9 6.5H5.5c0 5 2 8 5.5 8.5M23 6.5h3.5c0 5-2 8-5.5 8.5" fill="none" stroke="#a87300" stroke-width="2"/><path d="M9 4h14v6.5a7 7 0 0 1-14 0z" fill="url(#xgGold)" stroke="#8a5d00" stroke-width="1"/><path d="M12 6v4.5a4 4 0 0 0 2 3.4" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" opacity=".85"/><path d="M14.3 17.2h3.4v4.5h-3.4z" fill="url(#xgGold)" stroke="#8a5d00" stroke-width=".8"/><rect x="10" y="21.5" width="12" height="3.4" rx=".8" fill="#7b4a1e" stroke="#4a2a0c" stroke-width=".8"/><rect x="8.5" y="24.8" width="15" height="3.6" rx=".8" fill="#5c3612" stroke="#3a1f08" stroke-width=".8"/><rect x="13" y="22.4" width="6" height="1.6" fill="url(#xgGold)"/></symbol>
+  <symbol id="h-cell" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 12h18M12 3v18" stroke="currentColor" stroke-width="2"/><rect x="12" y="3" width="9" height="9" fill="#f26b21" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="h-line" viewBox="0 0 24 24"><path d="M3 18c5 0 5-12 10-12s4 8 8 8" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><circle cx="3" cy="18" r="2" fill="currentColor"/><circle cx="21" cy="14" r="2" fill="#e2471d"/></symbol>
+</svg>
+
+<div class="topbar">
+  <div><span class="ttab logo"><svg viewBox="-4 0 148 44" role="img" aria-label="Guiame"><use href="#lgStack"/></svg><span id="modeTag"></span></span></div>
+  <div>
+    <a class="ttab sube" href="https://cafecito.app/amatosaurio" target="_blank" rel="noopener" title="Si te copa el juego, invitame un cafecito" aria-label="Cargame la SUBE: invitame un cafecito en cafecito.app (se abre en otra pestaña)"><i class="led" aria-hidden="true"></i><span class="t" aria-hidden="true"><span class="pre">Cargame la </span><strong>SUBE</strong><small>con un cafecito</small></span></a>
+    <span class="ttab" id="triesTab"><span class="lbl">INTENTOS</span> <b id="triesNow">0/0</b></span>
+    <span class="ttab" id="scoreTab" aria-label="Estrellas que todavía podés sacar"><b id="scoreNow"></b></span>
+    <button class="ttab" type="button" id="tutoBtn" aria-label="Cómo se juega">?</button>
+  </div>
+</div>
+
+<div id="desk">
+  <section class="win" id="consoleWin" aria-label="Consola">
+    <div class="bar"><span class="box" aria-hidden="true"></span><span class="chips" aria-hidden="true"><i></i><i></i><i></i><i></i></span><h2 id="consoleTitle">Consola</h2></div>
+    <div class="scrollwrap"><div class="body" id="consoleBody">
+      <div class="trip">
+        <div class="tstop"><span class="tag a">A</span><div><b id="nameA">—</b><small id="planoA"></small></div><span class="dot" id="dotA" title="Alguna línea llega a A"></span></div>
+        <div class="tstop"><span class="tag b">B</span><div><b id="nameB">—</b><small id="planoB"></small></div><span class="dot" id="dotB" title="Alguna línea llega a B"></span></div>
+      </div>
+
+      <form class="display" id="lineForm" autocomplete="off">
+        <div class="entry"><label for="lineInput">LÍNEA</label>
+          <input id="lineInput" inputmode="none" spellcheck="false" maxlength="24" placeholder="···"></div>
+        <div id="match" aria-live="polite"></div>
+        <div id="status" role="status" aria-live="polite"></div>
+      </form>
+
+      <div id="controls">
+        <div class="modes" role="group" aria-label="Tipo de línea">
+          <button type="button" data-mode="num" aria-pressed="true">COLECTIVO</button>
+          <button type="button" data-mode="subte" aria-pressed="false">SUBTE</button>
+          <button type="button" data-mode="tren" aria-pressed="false">TREN</button>
+        </div>
+        <div class="keypad" id="keypad" style="margin-top:9px"></div>
+      </div>
+
+      <div class="gindex">
+        <h3><span>Líneas tiradas</span><span id="count">0</span></h3>
+        <div class="cells" id="thrown"></div>
+        <p class="empty" id="emptyMsg">Todavía no tiraste ninguna línea.</p>
+      </div>
+
+      <p class="credits">Caminando: hasta <span id="walkLbl"></span> desde A o B y <span id="xferLbl"></span> para combinar. Recorridos © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>; pueden estar desactualizados. Escudos: <a href="https://commons.wikimedia.org/">Wikimedia Commons</a>.</p>
+      <label class="mute-opt"><input type="checkbox" id="muteChk"> Silenciar sonidos</label>
+      <label class="vol-opt">Volumen <input type="range" id="volRange" min="0" max="100" step="5" value="50"> <output id="volVal">50%</output></label>
+    </div>
+    <div class="xpscroll" id="xpScroll" aria-hidden="true">
+      <button type="button" class="xs-btn up" tabindex="-1"><svg viewBox="0 0 9 9"><path d="M1 6.5 4.5 3 8 6.5" fill="none" stroke="currentColor" stroke-width="1.8"/></svg></button>
+      <div class="xs-track"><div class="xs-thumb"><i></i></div></div>
+      <button type="button" class="xs-btn down" tabindex="-1"><svg viewBox="0 0 9 9"><path d="M1 2.5 4.5 6 8 2.5" fill="none" stroke="currentColor" stroke-width="1.8"/></svg></button>
+    </div></div>
+  </section>
+
+  <section class="win" id="mapWin" aria-label="Plano">
+    <div class="bar"><span class="box" aria-hidden="true"></span><span class="chips" aria-hidden="true"><i></i><i></i><i></i><i></i></span><h2 id="mapTitle">Plano</h2></div>
+    <div id="mapWrap">
+      <div class="ruler ruler-x" id="rulerX" aria-hidden="true"></div>
+      <div class="ruler ruler-y" id="rulerY" aria-hidden="true"></div>
+      <div id="map" role="application" aria-label="Plano del AMBA"></div>
+      <div class="map-frame" aria-hidden="true"></div>
+    </div>
+  </section>
+</div>
+
+<nav class="dock" aria-label="Acciones">
+  <button type="button" id="homeBtn"><svg><use href="#d-pick"/></svg>Tu zona</button>
+  <button type="button" id="dayBtn"><svg><use href="#d-day"/></svg>Desafío diario</button>
+  <button type="button" id="pickBtn"><svg><use href="#d-new"/></svg>+ Viajes</button>
+  <button type="button" id="helpBtn"><svg><use href="#d-guide"/></svg>Pistas</button>
+  <button type="button" id="optDock" disabled><svg><use href="#d-opt"/></svg>Óptima</button>
+  <button type="button" id="rankBtn"><svg><use href="#d-rank"/></svg>Ranking</button>
+  <span class="tray"><button type="button" id="muteBtn" aria-pressed="false" aria-label="Silenciar sonidos" title="Silenciar sonidos"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 7.5h3l4-3.5v12l-4-3.5H3z" fill="#fff" stroke="#0b2a6e" stroke-width="1" stroke-linejoin="round"/><g class="on" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"><path d="M12.5 7.5a3.5 3.5 0 0 1 0 5"/><path d="M14.5 5.5a6.3 6.3 0 0 1 0 9"/></g><g class="off" stroke="#e0201c" stroke-width="2.2" stroke-linecap="round"><path d="M12.5 7.5l5 5M17.5 7.5l-5 5"/></g></svg></button><span id="clock" aria-hidden="true"></span></span>
+</nav>
+
+<div class="overlay" id="pickOverlay" hidden>
+  <section class="win help" role="dialog" aria-modal="true" aria-labelledby="pickTitle">
+    <div class="bar"><button class="box" type="button" id="pickClose" aria-label="Cerrar"><svg><use href="#i-x"/></svg></button><span class="chips" aria-hidden="true"><i></i><i></i><i></i><i></i></span><h2 id="pickTitle">Viajes</h2></div>
+    <div class="body" id="pickOpts">
+      <p class="hint">Capital y La Plata: viajes adentro. Las zonas del conurbano también van y vienen de Capital.</p>
+      <div class="zones">
+        <button class="zone" type="button" data-pick="capital">Capital</button>
+        <button class="zone" type="button" data-pick="norte">Zona Norte</button>
+        <button class="zone" type="button" data-pick="noroeste">Noroeste</button>
+        <button class="zone" type="button" data-pick="oeste">Zona Oeste</button>
+        <button class="zone" type="button" data-pick="sur">Zona Sur</button>
+        <button class="zone" type="button" data-pick="laplata">La Plata</button>
+      </div>
+      <div class="opts">
+        <button class="opt" type="button" data-pick="libre"><svg><use href="#d-new"/></svg>Libre: cualquier lugar del AMBA</button>
+        <button class="opt" type="button" data-pick="here"><svg><use href="#d-pick"/></svg>Desde donde estoy</button>
+        <button class="opt" type="button" data-pick="map"><svg><use href="#h-cell"/></svg>Tocar A y B en el plano</button>
+        <button class="opt" type="button" data-pick="home"><svg><use href="#d-pick"/></svg>Cambiar mi zona</button>
+      </div>
+      <p class="hint small">Tu ubicación no se guarda ni se envía a ningún lado.</p>
+    </div>
+  </section>
+</div>
+
+<div class="overlay" id="homeOverlay" hidden>
+  <section class="win help" role="dialog" aria-modal="true" aria-labelledby="homeTitle">
+    <div class="bar"><button class="box" type="button" id="homeClose" aria-label="Cerrar"><svg><use href="#i-x"/></svg></button><span class="chips" aria-hidden="true"><i></i><i></i><i></i><i></i></span><h2 id="homeTitle">¿Dónde vivís?</h2></div>
+    <div class="body" id="homeOpts">
+      <p class="hint">Todos los días vas a tener un viaje de tu zona, el mismo para todos tus vecinos. Además está el desafío diario, igual para todo el AMBA.</p>
+      <div class="zones">
+        <button class="zone" type="button" data-home="capital">Capital</button>
+        <button class="zone" type="button" data-home="norte">Zona Norte</button>
+        <button class="zone" type="button" data-home="noroeste">Noroeste</button>
+        <button class="zone" type="button" data-home="oeste">Zona Oeste</button>
+        <button class="zone" type="button" data-home="sur">Zona Sur</button>
+        <button class="zone" type="button" data-home="laplata">La Plata</button>
+      </div>
+      <div class="opts"><button class="opt" type="button" data-home="gps"><svg><use href="#d-pick"/></svg>Detectarla con mi ubicación</button></div>
+      <p class="hint" id="homeMsg" role="status" hidden></p>
+      <p class="hint small">Solo se guarda el nombre de la zona en este navegador. Tu ubicación no se guarda ni se envía.</p>
+    </div>
+  </section>
+</div>
+
+<div class="overlay book-ov" id="tutoOverlay" hidden>
+  <section class="booklet" role="dialog" aria-modal="true" aria-labelledby="tutoTitle">
+    <h2 id="tutoTitle" class="sr">Cómo se juega</h2>
+    <div class="book" id="book" data-at="0">
+      <div class="leaf back" aria-hidden="true"></div>
+    <div class="leaf page" data-leaf="1">
+      <h3 class="sr">Llegá de A a B</h3>
+      <svg class="wordart" viewBox="0 0 300 100" aria-hidden="true"><defs><linearGradient id="wa1" x1="0" x2="1"><stop offset="0" stop-color="#ff1e1e"/><stop offset=".2" stop-color="#ff9a00"/><stop offset=".4" stop-color="#ffe600"/><stop offset=".6" stop-color="#22c33a"/><stop offset=".8" stop-color="#1e6bff"/><stop offset="1" stop-color="#9a2cff"/></linearGradient><path id="wa1p" d="M18 88 Q150 6 282 88"/></defs>
+<text font-family="'Arial Black', Impact, 'Arial', sans-serif" font-weight="900" font-size="34" fill="#000" opacity=".35" transform="translate(4 4)"><textPath href="#wa1p" startOffset="50%" text-anchor="middle">¡Llegá de A a B!</textPath></text>
+<text font-family="'Arial Black', Impact, 'Arial', sans-serif" font-weight="900" font-size="34" fill="url(#wa1)" stroke="#000" stroke-width="1.1" paint-order="stroke"><textPath href="#wa1p" startOffset="50%" text-anchor="middle">¡Llegá de A a B!</textPath></text></svg>
+      <p class="lead">En el plano hay dos puntos. Tenés que unirlos viajando en colectivo, subte o tren.</p>
+      <figure class="clip"><div class="art"><span class="tag a">A</span><i class="dash"></i><span class="tag b">B</span></div><figcaption>Figura 1. Dos puntos en el plano.</figcaption></figure>
+      <i class="pg-tab" style="--k:0" aria-hidden="true">1</i>
+    </div>
+    <div class="leaf page" data-leaf="2">
+      <h3 class="sr">Tecleá líneas</h3>
+      <svg class="wordart" viewBox="0 0 300 100" aria-hidden="true"><defs><linearGradient id="wa2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fffbb0"/><stop offset=".5" stop-color="#ffd21e"/><stop offset="1" stop-color="#ff8a00"/></linearGradient></defs>
+<g font-family="'Arial Black', Impact, 'Arial', sans-serif" font-weight="900" font-size="50" text-anchor="middle"><text x="158.1" y="74.1" fill="#7a3c00" textLength="262" lengthAdjust="spacingAndGlyphs">Tecleá líneas</text><text x="157.2" y="73.2" fill="#7a3c00" textLength="262" lengthAdjust="spacingAndGlyphs">Tecleá líneas</text><text x="156.3" y="72.3" fill="#7a3c00" textLength="262" lengthAdjust="spacingAndGlyphs">Tecleá líneas</text><text x="155.4" y="71.4" fill="#7a3c00" textLength="262" lengthAdjust="spacingAndGlyphs">Tecleá líneas</text><text x="154.5" y="70.5" fill="#7a3c00" textLength="262" lengthAdjust="spacingAndGlyphs">Tecleá líneas</text><text x="153.6" y="69.6" fill="#7a3c00" textLength="262" lengthAdjust="spacingAndGlyphs">Tecleá líneas</text><text x="152.7" y="68.7" fill="#7a3c00" textLength="262" lengthAdjust="spacingAndGlyphs">Tecleá líneas</text><text x="151.8" y="67.8" fill="#a85400" textLength="262" lengthAdjust="spacingAndGlyphs">Tecleá líneas</text><text x="150.9" y="66.9" fill="#a85400" textLength="262" lengthAdjust="spacingAndGlyphs">Tecleá líneas</text><text x="150" y="66" fill="url(#wa2)" stroke="#5a2a00" stroke-width="1.2" paint-order="stroke" textLength="262" lengthAdjust="spacingAndGlyphs">Tecleá líneas</text></g></svg>
+      <p class="lead">Escribí el número de un colectivo (o elegí subte o tren) y tocá <b>TIRAR</b>. La línea se dibuja en el plano. Cuando dos líneas se tocan, combinás.</p>
+      <figure class="clip"><div class="art"><span class="key-demo">60</span><span class="key-demo go">TIRAR</span></div><figcaption>Figura 2. El teclado de la consola.</figcaption></figure>
+      <i class="pg-tab" style="--k:1" aria-hidden="true">2</i>
+    </div>
+    <div class="leaf page" data-leaf="3">
+      <h3 class="sr">Mirá los colores</h3>
+      <svg class="wordart" viewBox="0 0 300 100" aria-hidden="true"><defs><linearGradient id="wa3" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7fe0ff"/><stop offset=".5" stop-color="#1b6bff"/><stop offset="1" stop-color="#14209a"/></linearGradient><path id="wa3p" d="M12 64 C 60 22, 100 100, 150 60 S 240 18, 290 58"/></defs>
+<text font-family="'Arial Black', Impact, 'Arial', sans-serif" font-weight="900" font-size="33" fill="#000" opacity=".3" transform="translate(3 5)"><textPath href="#wa3p" startOffset="50%" text-anchor="middle">Mirá los colores</textPath></text>
+<text font-family="'Arial Black', Impact, 'Arial', sans-serif" font-weight="900" font-size="33" fill="url(#wa3)" stroke="#fff" stroke-width="3" paint-order="stroke"><textPath href="#wa3p" startOffset="50%" text-anchor="middle">Mirá los colores</textPath></text>
+<text font-family="'Arial Black', Impact, 'Arial', sans-serif" font-weight="900" font-size="33" fill="none" stroke="#0b1460" stroke-width=".8"><textPath href="#wa3p" startOffset="50%" text-anchor="middle">Mirá los colores</textPath></text></svg>
+      <p class="lead"><b>Verde</b>: va por el camino más corto. <b>Naranja</b>: sirve, con un trasbordo de más. <b>Rojo</b>: está lejos.</p>
+      <figure class="clip"><div class="art"><span class="sq g"></span><span class="sq o"></span><span class="sq r"></span></div><figcaption>Figura 3. Verde, naranja y rojo.</figcaption></figure>
+      <i class="pg-tab" style="--k:2" aria-hidden="true">3</i>
+    </div>
+    <div class="leaf page" data-leaf="4">
+      <h3 class="sr">Hasta 10 intentos</h3>
+      <svg class="wordart" viewBox="0 0 300 100" aria-hidden="true"><defs><linearGradient id="wa4" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".45" stop-color="#9aa6bb"/><stop offset=".5" stop-color="#3b4458"/><stop offset=".62" stop-color="#d8dde8"/><stop offset="1" stop-color="#7d889e"/></linearGradient></defs>
+<g transform="translate(150 0) skewX(-14) translate(-150 0)" font-family="'Arial Black', Impact, 'Arial', sans-serif" font-weight="900" text-anchor="middle">
+<text x="156" y="47" font-size="30" fill="#000" opacity=".3" textLength="200" lengthAdjust="spacingAndGlyphs">¡Hasta 10</text>
+<text x="156" y="91" font-size="36" fill="#000" opacity=".3" textLength="270" lengthAdjust="spacingAndGlyphs">intentos!</text>
+<text x="152" y="43" font-size="30" fill="url(#wa4)" stroke="#1a1d26" stroke-width="1.1" paint-order="stroke" textLength="200" lengthAdjust="spacingAndGlyphs">¡Hasta 10</text>
+<text x="152" y="87" font-size="36" fill="url(#wa4)" stroke="#1a1d26" stroke-width="1.1" paint-order="stroke" textLength="270" lengthAdjust="spacingAndGlyphs">intentos!</text></g></svg>
+      <p class="lead">Probá las líneas que quieras. Cuantos menos intentos uses, más estrellas. Si te trabás, las <b>Pistas</b> te ayudan a cambio de intentos.</p>
+      <figure class="clip"><div class="art stars-demo"></div><figcaption>Figura 4. Tu puntaje en estrellas.</figcaption></figure>
+      <i class="pg-tab" style="--k:3" aria-hidden="true">4</i>
+    </div>
+      <button class="leaf cover" type="button" data-leaf="0" id="bookCover" aria-label="Abrir la guía: cómo se juega">
+        <svg class="cover-art" viewBox="0 0 300 400" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+  <defs>
+    <linearGradient id="cvSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1679d8"/><stop offset=".32" stop-color="#3ec3f2"/><stop offset=".47" stop-color="#d9f6ff"/><stop offset=".5" stop-color="#fff3a6"/></linearGradient>
+    <linearGradient id="cvField" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9be04a"/><stop offset=".35" stop-color="#2fb24a"/><stop offset=".7" stop-color="#169062"/><stop offset="1" stop-color="#0e5f73"/></linearGradient>
+    <linearGradient id="cvHaze" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff2fa8" stop-opacity="0"/><stop offset=".55" stop-color="#ff2fa8" stop-opacity="0"/><stop offset=".8" stop-color="#c41fd1" stop-opacity=".75"/><stop offset="1" stop-color="#4a17b8" stop-opacity=".95"/></linearGradient>
+    <linearGradient id="cvSun" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffd23a" stop-opacity=".95"/><stop offset=".4" stop-color="#ff7a1a" stop-opacity=".55"/><stop offset=".7" stop-color="#ff7a1a" stop-opacity="0"/></linearGradient>
+    <linearGradient id="cvPill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8a5cff"/><stop offset=".5" stop-color="#4b23c9"/><stop offset="1" stop-color="#25107e"/></linearGradient>
+    <radialGradient id="cvBall" cx=".35" cy=".3" r=".75"><stop offset="0" stop-color="#fff"/><stop offset=".18" stop-color="#ff8a6a"/><stop offset=".6" stop-color="#e0201c"/><stop offset="1" stop-color="#7a0a12"/></radialGradient>
+    <radialGradient id="cvFlare"><stop offset="0" stop-color="#fff"/><stop offset=".25" stop-color="#fff" stop-opacity=".8"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+    <linearGradient id="cvObL" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#dfe6f2"/></linearGradient>
+    <linearGradient id="cvGloss" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".0"/><stop offset=".42" stop-color="#fff" stop-opacity="0"/><stop offset=".5" stop-color="#fff" stop-opacity=".28"/><stop offset=".58" stop-color="#fff" stop-opacity="0"/></linearGradient>
+    <filter id="cvDrop" x="-10%" y="-20%" width="130%" height="150%"><feDropShadow dx="2.5" dy="3" stdDeviation="1.2" flood-color="#14062e" flood-opacity=".7"/></filter>
+    <filter id="cvSoft"><feGaussianBlur stdDeviation="6"/></filter>
+    <clipPath id="cvGround"><rect x="0" y="196" width="300" height="204"/></clipPath>
+  </defs>
+  <rect width="300" height="400" fill="url(#cvSky)"/>
+  <g filter="url(#cvSoft)" fill="#fff" opacity=".85"><ellipse cx="60" cy="150" rx="70" ry="16"/><ellipse cx="250" cy="140" rx="60" ry="14"/><ellipse cx="190" cy="178" rx="80" ry="10"/></g>
+  <rect width="300" height="400" fill="url(#cvSun)"/>
+  <rect y="196" width="300" height="204" fill="url(#cvField)"/>
+  <g clip-path="url(#cvGround)" stroke-linecap="round">
+    <g stroke="#a3110f" stroke-width="3.2"><line x1="150" y1="168" x2="-450" y2="400"/><line x1="150" y1="168" x2="-390" y2="400"/><line x1="150" y1="168" x2="-330" y2="400"/><line x1="150" y1="168" x2="-270" y2="400"/><line x1="150" y1="168" x2="-210" y2="400"/><line x1="150" y1="168" x2="-150" y2="400"/><line x1="150" y1="168" x2="-90" y2="400"/><line x1="150" y1="168" x2="-30" y2="400"/><line x1="150" y1="168" x2="30" y2="400"/><line x1="150" y1="168" x2="90" y2="400"/><line x1="150" y1="168" x2="150" y2="400"/><line x1="150" y1="168" x2="210" y2="400"/><line x1="150" y1="168" x2="270" y2="400"/><line x1="150" y1="168" x2="330" y2="400"/><line x1="150" y1="168" x2="390" y2="400"/><line x1="150" y1="168" x2="450" y2="400"/><line x1="150" y1="168" x2="510" y2="400"/><line x1="150" y1="168" x2="570" y2="400"/><line x1="150" y1="168" x2="630" y2="400"/><line x1="150" y1="168" x2="690" y2="400"/><line x1="150" y1="168" x2="750" y2="400"/><line x1="0" y1="200" x2="300" y2="200"/><line x1="0" y1="206" x2="300" y2="206"/><line x1="0" y1="214" x2="300" y2="214"/><line x1="0" y1="225" x2="300" y2="225"/><line x1="0" y1="240" x2="300" y2="240"/><line x1="0" y1="260" x2="300" y2="260"/><line x1="0" y1="286" x2="300" y2="286"/><line x1="0" y1="320" x2="300" y2="320"/><line x1="0" y1="364" x2="300" y2="364"/></g>
+    <g stroke="#ff4a2a" stroke-width="1.8"><line x1="150" y1="168" x2="-450" y2="400"/><line x1="150" y1="168" x2="-390" y2="400"/><line x1="150" y1="168" x2="-330" y2="400"/><line x1="150" y1="168" x2="-270" y2="400"/><line x1="150" y1="168" x2="-210" y2="400"/><line x1="150" y1="168" x2="-150" y2="400"/><line x1="150" y1="168" x2="-90" y2="400"/><line x1="150" y1="168" x2="-30" y2="400"/><line x1="150" y1="168" x2="30" y2="400"/><line x1="150" y1="168" x2="90" y2="400"/><line x1="150" y1="168" x2="150" y2="400"/><line x1="150" y1="168" x2="210" y2="400"/><line x1="150" y1="168" x2="270" y2="400"/><line x1="150" y1="168" x2="330" y2="400"/><line x1="150" y1="168" x2="390" y2="400"/><line x1="150" y1="168" x2="450" y2="400"/><line x1="150" y1="168" x2="510" y2="400"/><line x1="150" y1="168" x2="570" y2="400"/><line x1="150" y1="168" x2="630" y2="400"/><line x1="150" y1="168" x2="690" y2="400"/><line x1="150" y1="168" x2="750" y2="400"/><line x1="0" y1="200" x2="300" y2="200"/><line x1="0" y1="206" x2="300" y2="206"/><line x1="0" y1="214" x2="300" y2="214"/><line x1="0" y1="225" x2="300" y2="225"/><line x1="0" y1="240" x2="300" y2="240"/><line x1="0" y1="260" x2="300" y2="260"/><line x1="0" y1="286" x2="300" y2="286"/><line x1="0" y1="320" x2="300" y2="320"/><line x1="0" y1="364" x2="300" y2="364"/></g>
+    <g stroke="#ffd36a" stroke-width=".6" opacity=".9" transform="translate(-.6 -.8)"><line x1="150" y1="168" x2="-450" y2="400"/><line x1="150" y1="168" x2="-390" y2="400"/><line x1="150" y1="168" x2="-330" y2="400"/><line x1="150" y1="168" x2="-270" y2="400"/><line x1="150" y1="168" x2="-210" y2="400"/><line x1="150" y1="168" x2="-150" y2="400"/><line x1="150" y1="168" x2="-90" y2="400"/><line x1="150" y1="168" x2="-30" y2="400"/><line x1="150" y1="168" x2="30" y2="400"/><line x1="150" y1="168" x2="90" y2="400"/><line x1="150" y1="168" x2="150" y2="400"/><line x1="150" y1="168" x2="210" y2="400"/><line x1="150" y1="168" x2="270" y2="400"/><line x1="150" y1="168" x2="330" y2="400"/><line x1="150" y1="168" x2="390" y2="400"/><line x1="150" y1="168" x2="450" y2="400"/><line x1="150" y1="168" x2="510" y2="400"/><line x1="150" y1="168" x2="570" y2="400"/><line x1="150" y1="168" x2="630" y2="400"/><line x1="150" y1="168" x2="690" y2="400"/><line x1="150" y1="168" x2="750" y2="400"/><line x1="0" y1="200" x2="300" y2="200"/><line x1="0" y1="206" x2="300" y2="206"/><line x1="0" y1="214" x2="300" y2="214"/><line x1="0" y1="225" x2="300" y2="225"/><line x1="0" y1="240" x2="300" y2="240"/><line x1="0" y1="260" x2="300" y2="260"/><line x1="0" y1="286" x2="300" y2="286"/><line x1="0" y1="320" x2="300" y2="320"/><line x1="0" y1="364" x2="300" y2="364"/></g>
+  </g>
+  <rect width="300" height="400" fill="url(#cvHaze)"/>
+  <g>
+    <polygon points="128,330 172,330 168,314 132,314" fill="#c9d2e3"/>
+    <polygon points="141,316 150,316 150,112 145.5,112" fill="url(#cvObL)"/>
+    <polygon points="150,316 159,316 154.5,112 150,112" fill="#aab6cc"/>
+    <polygon points="145.5,112 150,98 150,112" fill="#fff"/><polygon points="150,98 154.5,112 150,112" fill="#9aa7c0"/>
+    <rect x="148.6" y="150" width="2.4" height="6" fill="#5d6a86" opacity=".6"/>
+  </g>
+  <use href="#lgStack" x="18" y="14" width="264" height="79"/>
+  <g transform="translate(262 22)"><circle r="26" fill="url(#cvFlare)"/><path d="M0-30 2 -2 30 0 2 2 0 30 -2 2 -30 0 -2 -2z" fill="#fff"/></g>
+  <g font-family="Archivo, 'Helvetica Neue', Arial, sans-serif" font-weight="800" style="font-variation-settings:'wdth' 74" stroke-linejoin="round" paint-order="stroke" filter="url(#cvDrop)">
+    <text x="150" y="176" text-anchor="middle" font-size="35" fill="#fff" stroke="#3b1c8c" stroke-width="5" letter-spacing="-.3">Capital Federal</text>
+    <text x="20" y="224" font-size="44" fill="#ffe23a" stroke="#d01f12" stroke-width="5.5" letter-spacing="-.5">Gran</text>
+    <text x="20" y="264" font-size="44" fill="#ffe23a" stroke="#d01f12" stroke-width="5.5" letter-spacing="-.5">Buenos Aires</text>
+  </g>
+  <g filter="url(#cvDrop)">
+    <rect x="26" y="276" width="140" height="34" rx="17" fill="url(#cvPill)" stroke="#fff" stroke-width="1.5"/>
+    <circle cx="30" cy="293" r="15" fill="url(#cvBall)"/>
+    <text x="102" y="300" text-anchor="middle" font-family="Archivo, 'Helvetica Neue', Arial, sans-serif" font-weight="800" font-size="22" fill="#fff" style="font-variation-settings:'wdth' 74">y Aledaños</text>
+  </g>
+  <g font-family="Archivo, 'Helvetica Neue', Arial, sans-serif" font-weight="900" stroke-linejoin="round" paint-order="stroke" style="font-variation-settings:'wdth' 70" filter="url(#cvDrop)">
+    <text x="284" y="356" text-anchor="end" font-size="60" fill="#ffe23a" stroke="#d01f12" stroke-width="7" letter-spacing="-1">2026</text>
+  </g>
+  <g font-family="Archivo, 'Helvetica Neue', Arial, sans-serif" font-weight="800" font-size="12.5" fill="#fff6a0" stroke="#2a0f6e" stroke-width="3" stroke-linejoin="round" paint-order="stroke" style="font-variation-settings:'wdth' 80">
+    <text x="22" y="334">Colectivos, Subtes</text><text x="22" y="349">y Trenes del AMBA</text>
+  </g>
+  <g transform="translate(246 210) rotate(-8) scale(.92)">
+    <circle r="36" fill="#fff"/><circle r="32.5" fill="#ffe23a" stroke="#1b3fbf" stroke-width="1"/>
+    <g font-family="Archivo, 'Helvetica Neue', Arial, sans-serif" font-weight="800" fill="#1b3fbf" text-anchor="middle" style="font-variation-settings:'wdth' 80">
+      <text y="-13" font-size="10.5" letter-spacing=".5">INCLUYE:</text>
+      <text y="0" font-size="9.5" font-weight="700">Cómo se</text><text y="11" font-size="9.5" font-weight="700">juega en</text><text y="22" font-size="9.5" font-weight="700">4 pasos</text>
+    </g>
+  </g>
+  <rect width="300" height="400" fill="url(#cvGloss)"/>
+</svg>
+      </button>
+      <span class="spiral" aria-hidden="true"></span>
+    </div>
+    <div class="tuto-nav">
+      <button class="btn" type="button" id="tutoSkip">Saltear</button>
+      <span class="pips" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+      <button class="btn hot" type="button" id="tutoNext">Abrir</button>
+    </div>
+  </section>
+</div>
+
+<div class="overlay" id="helpOverlay" hidden>
+  <section class="win help" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+    <div class="bar"><button class="box" type="button" id="helpClose" aria-label="Cerrar"><svg><use href="#i-x"/></svg></button><span class="chips" aria-hidden="true"><i></i><i></i><i></i><i></i></span><h2 id="helpTitle">Pistas</h2></div>
+    <div class="body">
+      <p class="hint">Cada consulta gasta intentos. Siempre te queda al menos uno para tirar.</p>
+      <div class="opts" id="helpOpts">
+        <button class="opt" type="button" data-help="A"><svg><use href="#h-cell"/></svg>¿Qué líneas pasan cerca de A?<span class="price">1 intento</span></button>
+        <button class="opt" type="button" data-help="B"><svg><use href="#h-cell"/></svg>¿Qué líneas pasan cerca de B?<span class="price">1 intento</span></button>
+        <button class="opt" type="button" data-help="tap"><svg><use href="#h-cell"/></svg>Elegir un plano tocando el mapa<span class="price">1 intento</span></button>
+        <button class="opt" type="button" data-help="line" id="revealOpt"><svg><use href="#h-line"/></svg>Decime una línea de la ruta óptima<span class="price">2 intentos</span></button>
+      </div>
+      <div class="answer" id="helpAnswer"></div>
+    </div>
+  </section>
+</div>
+
+<div class="overlay" id="rankOverlay" hidden>
+  <section class="win help rank" role="dialog" aria-modal="true" aria-labelledby="rankTitle">
+    <div class="bar"><button class="box" type="button" id="rankClose" aria-label="Cerrar"><svg><use href="#i-x"/></svg></button><span class="chips" aria-hidden="true"><i></i><i></i><i></i><i></i></span><h2 id="rankTitle">Ranking</h2></div>
+    <div class="modes rtabs" id="rankTabs" role="tablist">
+      <button type="button" role="tab" data-tab="hoy">Hoy</button>
+      <button type="button" role="tab" data-tab="racha">Rachas</button>
+      <button type="button" role="tab" data-tab="ficha">Mi ficha</button>
+    </div>
+    <div class="body" id="rankBody"></div>
+  </section>
+</div>
+
+<div class="overlay" id="winOverlay" hidden>
+  <section class="win" role="dialog" aria-modal="true" aria-labelledby="winTitle">
+    <div class="bar"><button class="box" type="button" id="winClose" aria-label="Cerrar"><svg><use href="#i-x"/></svg></button><span class="chips" aria-hidden="true"><i></i><i></i><i></i><i></i></span><h2 id="winTitle">Boleto</h2></div>
+    <div class="body" id="winBody"></div>
+  </section>
+</div>
+
+<script>
+const WALK = 700;
+const XFER = 350;
+const LANDMARKS = [
+  ["Obelisco", -34.6037, -58.3816], ["Plaza de Mayo", -34.6083, -58.3712], ["La Bombonera", -34.6356, -58.3647],
+  ["Estadio Monumental", -34.5453, -58.4498], ["Aeroparque", -34.5592, -58.4156], ["Planetario", -34.5696, -58.4116],
+  ["Caminito", -34.6393, -58.3627], ["Cementerio de la Recoleta", -34.5875, -58.3934], ["Parque Centenario", -34.6067, -58.4353],
+  ["Estación Tigre", -34.4226, -58.5796], ["Catedral de La Plata", -34.9218, -57.9563], ["Quilmes centro", -34.7206, -58.2546],
+  ["Morón centro", -34.6534, -58.6198], ["Ciudad Universitaria", -34.5426, -58.4421], ["Feria de Mataderos", -34.6597, -58.5033],
+  ["Lomas de Zamora centro", -34.7609, -58.4063], ["Catedral de San Isidro", -34.4714, -58.5093], ["Aeropuerto de Ezeiza", -34.8150, -58.5348],
+  ["Estadio de Racing", -34.6678, -58.3686], ["Plaza Serrano", -34.5886, -58.4302], ["Barrio Chino", -34.5604, -58.4550],
+  ["Reserva Ecológica", -34.6131, -58.3536], ["Puente de la Mujer", -34.6083, -58.3653], ["Liniers", -34.6420, -58.5243],
+  ["Merlo centro", -34.6650, -58.7287], ["San Miguel centro", -34.5426, -58.7128], ["Pilar centro", -34.4587, -58.9142],
+  ["Moreno centro", -34.6505, -58.7907], ["Temperley", -34.7745, -58.3966], ["San Justo", -34.6833, -58.5600],
+  ["Tecnópolis", -34.5578, -58.5047], ["Estadio de Vélez", -34.6354, -58.5207], ["Parque Patricios", -34.6378, -58.4040],
+  ["Plaza Italia", -34.5810, -58.4210], ["Abasto", -34.6033, -58.4110], ["Congreso", -34.6097, -58.3926],
+];
+const LINES = [...(window.RAIL_DATA||[]), ...(window.BUS_DATA||[])];
+const norm = s => s.normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().replace(/\s+/g," ").trim();
+function busColor(id){ let h=0; for (const c of id) h=(h*31+c.charCodeAt(0))%360; return `hsl(${h} 65% 42%)`; }
+LINES.forEach((l,i) => { l.idx=i; if (!l.color) l.color = busColor(l.id); });
+const byAlias = new Map();
+for (const l of LINES) for (const a of [norm(l.name), ...l.aliases]) if (!byAlias.has(a)) byAlias.set(a, l);
+const COSLAT = Math.cos(-34.6*Math.PI/180);
+const dist = (a,b) => Math.hypot((a[0]-b[0])*111320, (a[1]-b[1])*111320*COSLAT);
+const CELL = 0.004;
+const cellKey = (lat,lon) => Math.floor(lat/CELL)+","+Math.floor(lon/(CELL/COSLAT));
+const grid = new Map();
+LINES.forEach(l => l.stops.forEach((s,si) => { const k=cellKey(s[0],s[1]); if(!grid.has(k)) grid.set(k,[]); grid.get(k).push([l.idx,si]); }));
+function nearby(p, radius){
+  const r = Math.ceil(radius/(CELL*111320)), [ci,cj] = cellKey(p[0],p[1]).split(",").map(Number), out=[];
+  for (let i=-r;i<=r;i++) for (let j=-r;j<=r;j++) for (const e of grid.get((ci+i)+","+(cj+j))||[]) out.push(e);
+  return out;
+}
+let zone=null;
+function makeZone(A,B){
+  const L=dist(A,B)||1;
+  return { A, L, ux:(B[1]-A[1])*111320*COSLAT/L, uy:(B[0]-A[0])*111320/L,
+           pad:Math.max(5000,.5*L), w:Math.max(4000,.5*L), clip:new Map(), neigh:new Map() };
+}
+function inZone(p){
+  if (!zone) return true;
+  const x=(p[1]-zone.A[1])*111320*COSLAT, y=(p[0]-zone.A[0])*111320;
+  const t=x*zone.ux+y*zone.uy, d=Math.abs(x*zone.uy-y*zone.ux);
+  return t>=-zone.pad && t<=zone.L+zone.pad && d<=zone.w;
+}
+function clip(line){
+  if (zone.clip.has(line.idx)) return zone.clip.get(line.idx);
+  const paths=[];
+  for (const p of line.paths){
+    let cur=[];
+    for (const pt of p){ if (inZone(pt)) cur.push(pt); else { if (cur.length>1) paths.push(cur); cur=[]; } }
+    if (cur.length>1) paths.push(cur);
+  }
+  const c={ paths, stops: line.stops.filter(inZone) };
+  zone.clip.set(line.idx,c); return c;
+}
+function closestStop(line, p){
+  let best=null, bd=Infinity;
+  for (const s of clip(line).stops){ const d=dist(s,p); if (d<bd){ bd=d; best=s; } }
+  return { stop:best, d:bd };
+}
+function bestTransfer(l1, l2){
+  let best=null;
+  for (const s of clip(l1).stops) for (const [li,si] of nearby(s, XFER)) if (li===l2.idx){
+    const o=l2.stops[si], d=dist(s,o);
+    if (d<=XFER && inZone(o) && (!best || d<best.d)) best = { a:s, b:o, d };
+  }
+  return best;
+}
+function neighbours(l){
+  if (zone.neigh.has(l.idx)) return zone.neigh.get(l.idx);
+  const set = new Set();
+  for (const s of clip(l).stops) for (const [li,si] of nearby(s, XFER)){
+    const o=LINES[li].stops[si];
+    if (li!==l.idx && dist(s,o)<=XFER && inZone(o)) set.add(li);
+  }
+  zone.neigh.set(l.idx, set); return set;
+}
+function linesNear(p, radius){ const set=new Set(); for (const [li,si] of nearby(p,radius)){ const o=LINES[li].stops[si]; if (dist(p,o)<=radius && inZone(o)) set.add(li); } return set; }
+function optimalLines(A, B){
+  zone = makeZone(A,B);
+  const start = linesNear(A, WALK), goal = linesNear(B, WALK);
+  if (!start.size || !goal.size) return Infinity;
+  const d = new Map(); const q=[];
+  for (const s of start){ d.set(s,1); q.push(s); }
+  while (q.length){
+    const li=q.shift(); if (goal.has(li)) return d.get(li);
+    if (d.get(li) >= 5) continue;
+    for (const n of neighbours(LINES[li])) if (!d.has(n)){ d.set(n,d.get(li)+1); q.push(n); }
+  }
+  return Infinity;
+}
+function subPath(paths, p1, p2){
+  const pts=[], adj=[];
+  const link=(i,j,w)=>{ adj[i].push([j,w]); adj[j].push([i,w]); };
+  for (const path of paths){
+    const base=pts.length;
+    path.forEach((q,k)=>{ pts.push(q); adj.push([]); if (k) link(base+k-1, base+k, dist(path[k-1],q)); });
+  }
+  if (!pts.length) return [];
+  let base=0;
+  for (const path of paths){
+    for (const e of [base, base+path.length-1]){
+      let best=-1, bd=80;
+      pts.forEach((q,i)=>{ if (i>=base && i<base+path.length) return; const d=dist(pts[e],q); if (d<bd){ bd=d; best=i; } });
+      if (best>=0) link(e,best,bd);
+    }
+    base+=path.length;
+  }
+  const nearest = p => { let bi=0, bd=Infinity; pts.forEach((q,i)=>{ const d=dist(p,q); if(d<bd){bd=d;bi=i;} }); return bi; };
+  const s0=nearest(p1), t0=nearest(p2);
+  const D=new Float64Array(pts.length).fill(Infinity), prev=new Int32Array(pts.length).fill(-1), done=new Uint8Array(pts.length);
+  D[s0]=0;
+  for (;;){
+    let u=-1, ud=Infinity; for (let i=0;i<pts.length;i++) if(!done[i] && D[i]<ud){ud=D[i];u=i;}
+    if (u<0 || u===t0) break; done[u]=1;
+    for (const [v,w] of adj[u]) if (D[u]+w<D[v]){ D[v]=D[u]+w; prev[v]=u; }
+  }
+  if (!isFinite(D[t0])) return [[p1,p2]];
+  const out=[]; for (let u=t0; u>=0; u=prev[u]) out.push(pts[u]);
+  return [out.reverse()];
+}
+function optimalRoute(A, B){
+  zone = makeZone(A,B);
+  const start = linesNear(A, WALK), goal = linesNear(B, WALK);
+  if (!start.size || !goal.size) return null;
+  const prev = new Map(), d = new Map(), q=[];
+  for (const s of start){ d.set(s,1); prev.set(s,-1); q.push(s); }
+  while (q.length){
+    const li=q.shift();
+    if (goal.has(li)){ const r=[]; for (let u=li; u!==-1; u=prev.get(u)) r.unshift(u); return r; }
+    if (d.get(li) >= 5) continue;
+    for (const n of neighbours(LINES[li])) if (!d.has(n)){ d.set(n,d.get(li)+1); prev.set(n,li); q.push(n); }
+  }
+  return null;
+}
+function pickChain(rand, list=LANDMARKS, legs=3){
+  for (let t=0; t<60; t++){
+    const chain=[list[Math.floor(rand()*list.length)]];
+    while (chain.length<=legs){
+      const prev=chain[chain.length-1]; let next=null;
+      for (let k=0; k<150 && !next; k++){
+        const c=list[Math.floor(rand()*list.length)];
+        if (chain.includes(c)) continue;
+        const d=dist([prev[1],prev[2]],[c[1],c[2]]);
+        if (d<4000 || d>16000) continue;
+        const r=optimalRoute([prev[1],prev[2]],[c[1],c[2]]);
+        if (r && r.length>=2) next=c;
+      }
+      if (!next) break;
+      chain.push(next);
+    }
+    if (chain.length===legs+1) return chain;
+  }
+  return null;
+}
+function lineDistances(A, B){
+  const bfs = seeds => { const d=new Map(), q=[]; for (const s of seeds){ d.set(s,1); q.push(s); }
+    while (q.length){ const li=q.shift(); if (d.get(li)>=7) continue;
+      for (const n of neighbours(LINES[li])) if (!d.has(n)){ d.set(n,d.get(li)+1); q.push(n); } }
+    return d; };
+  return { dA: bfs(linesNear(A, WALK)), dB: bfs(linesNear(B, WALK)) };
+}
+function rateLine(line){
+  const a=game.dist.dA.get(line.idx), b=game.dist.dB.get(line.idx);
+  if (a===undefined || b===undefined || !isFinite(game.optimal)) return "r";
+  const through=a+b-1;
+  return through<=game.optimal ? "g" : through===game.optimal+1 ? "o" : "r";
+}
+const MARK = { g:"ÓPTIMA", o:"CERCA", r:"LEJOS", h:"AYUDA" };
+const MARK_SAY = { g:"está en una ruta óptima", o:"está cerca: con ella hace falta un trasbordo de más", r:"está lejos de la mejor ruta" };
+const EMOJI = { g:"🟩", o:"🟧", r:"🟥", h:"🔍" };
+const DAY0 = Date.UTC(2026,10,17);
+function todayNum(){ const ba=new Date(Date.now()-3*3600e3); return Math.floor((Date.UTC(ba.getUTCFullYear(),ba.getUTCMonth(),ba.getUTCDate())-DAY0)/864e5)+1; }
+function seeded(n){ let t=n*2654435761>>>0; return ()=>{ t=(t+0x6D2B79F5)>>>0; let r=Math.imul(t^t>>>15,1|t); r^=r+Math.imul(r^r>>>7,61|r); return ((r^r>>>14)>>>0)/4294967296; }; }
+const dailyKey = n => "comollego-dia-"+n;
+function loadSaved(k){ try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } }
+function gameTitle(){
+  if (game.mode==="dia") return `Desafío diario #${game.day} · Tramo ${game.leg+1}/${LEGS}`;
+  if (game.mode==="barrio") return `Tu desafío #${game.day} · ${MODE_TITLE[game.zone]}`;
+  return MODE_TITLE[game.mode];
+}
+const LAT0=-34.30, LON0=-59.10, DLAT=0.02, DLON=0.025, NCOL=52, NROW=40;
+const colName = c => c<26 ? String.fromCharCode(65+c) : String.fromCharCode(64+Math.floor(c/26))+String.fromCharCode(65+c%26);
+const cellOf = p => [Math.floor((p[1]-LON0)/DLON), Math.floor((LAT0-p[0])/DLAT)];
+const planoOf = p => { const [c,r]=cellOf(p); return colName(c)+(r+1); };
+const cellIndex = new Map();
+LINES.forEach(l => l.stops.forEach(s => { const k=cellOf(s).join(","); if (!cellIndex.has(k)) cellIndex.set(k,new Set()); cellIndex.get(k).add(l.idx); }));
+const linesInCell = p => [...(cellIndex.get(cellOf(p).join(","))||[])].map(i=>LINES[i]);
+const $ = id => document.getElementById(id);
+const INK="#12235e", BCOL="#c93a12";
+const GRID_BOUNDS = L.latLngBounds([LAT0-NROW*DLAT, LON0], [LAT0, LON0+NCOL*DLON]);
+const map = L.map("map", { zoomControl:false, preferCanvas:true, maxBounds:GRID_BOUNDS, maxBoundsViscosity:1 }).setView([-34.62,-58.45], 11);
+function lockToGrid(){ map.setMinZoom(map.getBoundsZoom(GRID_BOUNDS, true)); }
+lockToGrid(); map.on("resize", lockToGrid);
+L.control.zoom({ position:"bottomright" }).addTo(map);
+map.attributionControl.addAttribution('&copy; <a href="https://openfreemap.org">OpenFreeMap</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>');
+function guiaStyle(s){
+  const drop = /building|^poi_|natural_earth|aeroway|one_way|shield|boundary|label_country|label_state|ice|sand|^tunnel_|hatching|road_area_pattern|rail/;
+  s.layers = s.layers.filter(l => !drop.test(l.id));
+  delete s.sources.ne2_shaded;
+  for (const l of s.layers){
+    const id=l.id, p=(l.paint=l.paint||{}), lay=(l.layout=l.layout||{});
+    if (id==="background") p["background-color"]="#f9c698";
+    else if (id==="landuse_residential") { p["fill-color"]="#f9c698"; p["fill-opacity"]=1; }
+    else if (l.type==="fill" && /park|grass|wood|pitch|cemetery/.test(id)) { p["fill-color"]="#80ab90"; p["fill-opacity"]=1; delete p["fill-outline-color"]; }
+    else if (id==="park_outline") { p["line-color"]="#6a967b"; p["line-opacity"]=1; }
+    else if (id==="water") p["fill-color"]="#a9d9f3";
+    else if (l.type==="line" && /waterway/.test(id)) p["line-color"]="#a9d9f3";
+    else if (l.type==="fill" && /hospital|school|track|wetland/.test(id)) { p["fill-color"]="#fbd4ae"; p["fill-opacity"]=1; }
+    else if (l.type==="line" && /casing/.test(id)) { if (/trunk|motorway|primary|secondary|tertiary/.test(id)) l.layout.visibility="none"; else p["line-color"]="#c48d64"; }
+    else if (l.type==="line" && /(motorway|motorway_link)$/.test(id)) p["line-color"]="#d15e00";
+    else if (l.type==="line" && /(trunk_primary|secondary_tertiary)$/.test(id)) p["line-color"]="#fff6a6";
+    else if (l.type==="line" && /(minor|link|street|service_track|path_pedestrian)$/.test(id)) p["line-color"]="#ffffff";
+    if (l.type==="symbol"){
+      lay["text-font"] = /label_city|label_town/.test(id) ? ["Noto Sans Bold"] : ["Noto Sans Regular"];
+      lay["text-transform"]="uppercase"; lay["text-letter-spacing"]=.04; p["text-color"]="#000000"; p["text-halo-width"]=0;
+    }
+  }
+  const feats=[];
+  for (let c=0;c<=NCOL;c++){ const lon=LON0+c*DLON; feats.push({ type:"Feature", properties:{ st: c%4===0?4 : c%2===0?2 : 1 }, geometry:{ type:"LineString", coordinates:[[lon,LAT0],[lon,LAT0-NROW*DLAT]] } }); }
+  for (let r=0;r<=NROW;r++){ const lat=LAT0-r*DLAT; feats.push({ type:"Feature", properties:{ st: r%4===0?4 : r%2===0?2 : 1 }, geometry:{ type:"LineString", coordinates:[[LON0,lat],[LON0+NCOL*DLON,lat]] } }); }
+  s.sources.planos={ type:"geojson", data:{ type:"FeatureCollection", features:feats } };
+  const firstSym=s.layers.findIndex(l=>l.type==="symbol");
+  const paint={ "line-color":"#1bb7cb", "line-width":1, "line-opacity":.85 };
+  s.layers.splice(firstSym, 0,
+    { id:"planos-4", type:"line", source:"planos", filter:["==",["get","st"],4], paint },
+    { id:"planos-2", type:"line", source:"planos", minzoom:9, filter:["==",["get","st"],2], paint },
+    { id:"planos-1", type:"line", source:"planos", minzoom:10, filter:["==",["get","st"],1], paint });
+  return s;
+}
+let vectorGrid=false;
+fetch("https://tiles.openfreemap.org/styles/liberty").then(r=>r.json()).then(s=>{
+  L.maplibreGL({ style:guiaStyle(s), interactive:false }).addTo(map);
+  vectorGrid=true; drawGrid();
+}).catch(()=>{
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom:18, attribution:'&copy; OpenStreetMap' }).addTo(map);
+});
+map.createPane("grid").style.zIndex = 350;
+map.getPane("grid").style.mixBlendMode = "multiply";
+const gridRenderer = L.svg({ pane:"grid" });
+const gridLayer = L.layerGroup().addTo(map);
+const linesLayer = L.layerGroup().addTo(map);
+const optLayer = L.layerGroup().addTo(map);
+const winLayer = L.layerGroup().addTo(map);
+const linksLayer = L.layerGroup().addTo(map);
+const pointsLayer = L.layerGroup().addTo(map);
+const pinIcon = (label, color) => L.divIcon({ className:"", iconSize:[34,34], iconAnchor:[17,36],
+  html:`<div class="pin" style="background:${color}"><span>${label}</span></div>` });
+function gridStep(){ const z=map.getZoom(); return z>=11 ? 1 : z>=10 ? 2 : 4; }
+function drawGrid(){
+  gridLayer.clearLayers();
+  if (vectorGrid) return drawRulers();
+  const st=gridStep(), b=map.getBounds();
+  const c0=Math.max(0,Math.floor((b.getWest()-LON0)/DLON)), c1=Math.min(NCOL,Math.ceil((b.getEast()-LON0)/DLON));
+  const r0=Math.max(0,Math.floor((LAT0-b.getNorth())/DLAT)), r1=Math.min(NROW,Math.ceil((LAT0-b.getSouth())/DLAT));
+  const style={ color:"#1bb7cb", weight:1, opacity:1, renderer:gridRenderer, interactive:false };
+  for (let c=c0-c0%st;c<=c1;c+=st){ const lon=LON0+c*DLON; gridLayer.addLayer(L.polyline([[LAT0-r0*DLAT,lon],[LAT0-r1*DLAT,lon]], style)); }
+  for (let r=r0-r0%st;r<=r1;r+=st){ const lat=LAT0-r*DLAT; gridLayer.addLayer(L.polyline([[lat,LON0+c0*DLON],[lat,LON0+c1*DLON]], style)); }
+  drawRulers();
+}
+function drawRulers(){
+  const st=gridStep(), b=map.getBounds(), size=map.getSize();
+  let x="", y="";
+  const c0=Math.max(0,Math.floor((b.getWest()-LON0)/DLON)), c1=Math.min(NCOL-1,Math.floor((b.getEast()-LON0)/DLON));
+  for (let c=c0-c0%st;c<=c1;c+=st){ const px=map.latLngToContainerPoint([b.getNorth(), LON0+(c+st/2)*DLON]).x+28; if (px>40 && px<size.x+20) x+=`<span style="left:${px}px">${colName(c)}</span>`; }
+  const r0=Math.max(0,Math.floor((LAT0-b.getNorth())/DLAT)), r1=Math.min(NROW-1,Math.floor((LAT0-b.getSouth())/DLAT));
+  for (let r=r0-r0%st;r<=r1;r+=st){ const py=map.latLngToContainerPoint([LAT0-(r+st/2)*DLAT, b.getWest()]).y; if (py>10 && py<size.y-10) y+=`<span style="top:${py}px">${r+1}</span>`; }
+  $("rulerX").innerHTML=x; $("rulerY").innerHTML=y;
+  const ctr=map.getCenter(); $("mapTitle").innerHTML=`Plano <span>${planoOf([ctr.lat,ctr.lng])}</span>`;
+}
+map.on("moveend zoomend", drawGrid);
+map.on("move", drawRulers);
+new ResizeObserver(()=>map.invalidateSize()).observe($("mapWrap"));
+const fitPad = () => ({ paddingTopLeft:[30,30], paddingBottomRight:[30,30] });
+const fit = (bounds, fly) => fly ? map.flyToBounds(bounds, { ...fitPad(), duration:.8 }) : map.fitBounds(bounds, fitPad());
+let game, picking=null, cellPicking=false;
+const MAX_TRIES=10;
+const MODE_TITLE = { dia:"Desafío diario", libre:"Libre", aca:"Desde donde estoy", plano:"Elegido en el plano",
+  capital:"Capital", norte:"Zona Norte", noroeste:"Noroeste", oeste:"Zona Oeste", sur:"Zona Sur", laplata:"La Plata" };
+let lastMode="libre";
+function startGame(A, B, nameA, nameB, mode="libre", day=0, zone=null, leg=0){
+  for (const l of [linesLayer,linksLayer,pointsLayer,winLayer,optLayer]) l.clearLayers();
+  cellPicking=false; picking=null; map.getContainer().classList.remove("cellpick");
+  const route = optimalRoute(A,B), dist = lineDistances(A,B);
+  const optimal = route ? route.length : Infinity;
+  game = { A, B, nameA, nameB, thrown:[], layers:new Map(), done:false, lost:false, optRoute:route, optimal,
+           help:0, revealed:new Set(), mode, day, zone, leg, dist, marks:new Map(), trail:[], tries:0, maxTries:MAX_TRIES,
+           saveKey: mode==="barrio" ? dailyKey(day)+"-"+zone : null };
+  if (mode!=="dia" && mode!=="barrio") lastMode=mode;
+  const title = gameTitle();
+  $("consoleTitle").textContent=title; $("modeTag").textContent = day ? "#"+day+(mode==="dia" ? ` · ${leg+1}/${LEGS}` : "") : "";
+  $("homeBtn").setAttribute("aria-pressed", mode==="barrio"); $("dayBtn").setAttribute("aria-pressed", mode==="dia");
+  $("pickBtn").setAttribute("aria-pressed", mode!=="dia" && mode!=="barrio");
+  $("nameA").textContent=nameA; $("nameB").textContent=nameB;
+  $("planoA").textContent="plano "+planoOf(A); $("planoB").textContent="plano "+planoOf(B);
+  pointsLayer.addLayer(L.circle(A, { radius:WALK, color:INK, weight:1.2, dashArray:"2 5", fillColor:INK, fillOpacity:.05, interactive:false }));
+  pointsLayer.addLayer(L.circle(B, { radius:WALK, color:BCOL, weight:1.2, dashArray:"2 5", fillColor:BCOL, fillOpacity:.06, interactive:false }));
+  pointsLayer.addLayer(L.marker(A, { icon:pinIcon("A",INK), keyboard:false }).bindTooltip(nameA));
+  pointsLayer.addLayer(L.marker(B, { icon:pinIcon("B",BCOL), keyboard:false }).bindTooltip(nameB));
+  fit(L.latLngBounds([A,B]).pad(0.25));
+  closeOverlay("winOverlay"); $("helpAnswer").innerHTML="";
+  $("controls").hidden=false; $("lineInput").disabled=false; $("optDock").disabled=true;
+  $("lineInput").value=""; updateMatch();
+  const prev = game.saveKey && loadSaved(game.saveKey);
+  const dprev = mode==="dia" && daily && daily.rec.complete;
+  say(`${title}. Tecleá líneas para unir A con B.` + (prev ? ` Ya lo jugaste (${prev.won?prev.stars+" de 5 estrellas":"sin llegar"}); esta vuelta no cuenta.` : "")
+    + (dprev ? ` Ya lo completaste hoy (${daily.rec.stars} de ${LEGS*5} estrellas); esta vuelta no cuenta.` : ""));
+  render(); refreshDots(); updateScore(false); updateTries();
+}
+const PLACES = LANDMARKS.concat(window.PLACES_DATA || []);
+const ZONES = {
+  capital:  [-34.705,-58.531,-34.535,-58.335],
+  norte:    [-34.575,-58.640,-34.400,-58.455],
+  noroeste: [-34.620,-58.950,-34.420,-58.520],
+  oeste:    [-34.760,-58.900,-34.600,-58.520],
+  sur:      [-34.870,-58.470,-34.640,-58.180],
+  laplata:  [-35.010,-58.100,-34.830,-57.850],
+};
+const inBox = (p,[s,w,n,e]) => p[1]>=s && p[1]<=n && p[2]>=w && p[2]<=e;
+const CABA = [[-34.5355,-58.4600],[-34.5517,-58.4877],[-34.5636,-58.5033],[-34.5740,-58.5208],[-34.5953,-58.5287],[-34.6150,-58.5310],[-34.6390,-58.5290],
+  [-34.6620,-58.5040],[-34.6850,-58.4800],[-34.7050,-58.4620],[-34.6900,-58.4450],[-34.6680,-58.4200],[-34.6600,-58.3900],
+  [-34.6480,-58.3700],[-34.6400,-58.3550],[-34.6300,-58.3330],[-34.6000,-58.3400],[-34.5800,-58.3800],[-34.5550,-58.4050]];
+function inPoly(lat, lon, poly){
+  let inside=false;
+  for (let i=0, j=poly.length-1; i<poly.length; j=i++){
+    const [yi,xi]=poly[i], [yj,xj]=poly[j];
+    if ((yi>lat)!==(yj>lat) && lon < (xj-xi)*(lat-yi)/(yj-yi)+xi) inside=!inside;
+  }
+  return inside;
+}
+const inCABA = p => inPoly(p[1], p[2], CABA);
+function pickPair(rand, list=LANDMARKS, dmin=4000, dmax=18000){
+  for (let tries=0; tries<250; tries++){
+    const a=list[Math.floor(rand()*list.length)], b=list[Math.floor(rand()*list.length)];
+    const d=dist([a[1],a[2]],[b[1],b[2]]);
+    if (a===b || d < dmin || d > dmax) continue;
+    const r=optimalRoute([a[1],a[2]],[b[1],b[2]]);
+    if (r && r.length>=2) return [a,b];
+  }
+  return [LANDMARKS[0], LANDMARKS[9]];
+}
+function pickBetween(listA, listB, dmin, dmax, rand=Math.random){
+  for (let k=0; k<250; k++){
+    const a=listA[Math.floor(rand()*listA.length)], b=listB[Math.floor(rand()*listB.length)];
+    const d=dist([a[1],a[2]],[b[1],b[2]]);
+    if (a===b || d<dmin || d>dmax) continue;
+    const r=optimalRoute([a[1],a[2]],[b[1],b[2]]);
+    if (r && r.length>=2) return rand()<.5 ? [a,b] : [b,a];
+  }
+  return null;
+}
+function zonePair(z, rand=Math.random){
+  const caba = PLACES.filter(inCABA);
+  let pair;
+  if (z==="libre") pair = pickPair(rand, PLACES, 4000, 20000);
+  else if (z==="capital") pair = pickBetween(caba, caba, 2500, 25000, rand);
+  else if (z==="laplata"){ const lp=PLACES.filter(p=>inBox(p, ZONES.laplata)); pair = pickBetween(lp, lp, 2000, 25000, rand); }
+  else { const zl=PLACES.filter(p=>inBox(p, ZONES[z]) && !inCABA(p)); pair = pickBetween(zl, zl.concat(caba), 2500, 22000, rand); }
+  return pair || pickPair(rand, PLACES, 4000, 20000);
+}
+function zoneGame(z){ const [a,b]=zonePair(z); startGame([a[1],a[2]],[b[1],b[2]], a[0], b[0], z); }
+const HOME_KEY="comollego-zona", ZONE_KEYS=Object.keys(ZONES);
+let homeZone=null; try { homeZone=localStorage.getItem(HOME_KEY); if (!ZONES[homeZone]) homeZone=null; } catch {}
+function zoneOf(lat, lon){
+  const p=["",lat,lon];
+  if (inCABA(p)) return "capital";
+  if (inBox(p, ZONES.laplata)) return "laplata";
+  for (const z of ["norte","noroeste","oeste","sur"]) if (inBox(p, ZONES[z])) return z;
+  return null;
+}
+function setHome(z){ homeZone=z; try { localStorage.setItem(HOME_KEY, z); } catch {} closeOverlay("homeOverlay"); homeGame(); }
+function homeGame(){
+  if (!homeZone) return openOverlay("homeOverlay");
+  const n=todayNum(), [a,b]=zonePair(homeZone, seeded(n*97+ZONE_KEYS.indexOf(homeZone)+13));
+  startGame([a[1],a[2]],[b[1],b[2]], a[0], b[0], "barrio", n, homeZone);
+}
+function randomGame(){ zoneGame(lastMode in ZONES || lastMode==="libre" ? lastMode : "libre"); }
+const LEGS=3, D3KEY = n => "comollego-d3-"+n;
+let daily=null;
+async function dailyGame(){
+  const n=todayNum();
+  if (!daily || daily.n!==n){
+    say("Cargando el desafío del día…");
+    const pts = await loadChallenge(n);
+    daily = { n, pts, rec: loadSaved(D3KEY(n)) || { legs:[] } };
+  }
+  startLeg(daily.rec.complete ? 0 : daily.rec.legs.length);
+}
+function startLeg(i){
+  const a=daily.pts[i], b=daily.pts[i+1];
+  startGame([a[1],a[2]],[b[1],b[2]], a[0], b[0], "dia", daily.n, null, i);
+}
+function recordLeg(res){
+  const r=daily.rec;
+  if (r.complete || r.legs.length!==game.leg) return false;
+  r.legs.push({ won:res.won, stars:res.stars, tries:game.tries, trail:game.trail.join("") });
+  if (r.legs.length===LEGS){
+    r.complete=true;
+    r.stars=r.legs.reduce((a,l)=>a+l.stars,0);
+    r.tries=r.legs.reduce((a,l)=>a+l.tries,0);
+  }
+  try { localStorage.setItem(D3KEY(daily.n), JSON.stringify(r)); } catch {}
+  return true;
+}
+function legSummaryHTML(){
+  const r=daily.rec;
+  return `<div class="legs">${daily.pts.slice(0,LEGS).map((p,i)=>{ const l=r.legs[i];
+      return `<div class="leg"><span class="n">${i+1}</span><span class="w">${esc(p[0])} → ${esc(daily.pts[i+1][0])}</span><b>${l ? (l.won ? l.stars+"★" : "—") : ""}</b></div>`; }).join("")}
+    <div class="leg tot"><span class="w">Total del día</span><b>${r.stars} / ${LEGS*5}★</b></div></div>`;
+}
+function updateTries(){
+  const left=game.maxTries-game.tries;
+  $("triesNow").textContent=`${game.tries}/${game.maxTries}`;
+  $("triesTab").setAttribute("aria-label", `${game.tries} de ${game.maxTries} intentos usados`);
+  $("triesTab").classList.toggle("low", left<=1 && !game.done);
+  updateScore(false);
+}
+function say(text, err){ const m=$("status"); m.textContent=text; m.classList.remove("err"); if (err){ void m.offsetWidth; m.classList.add("err"); } }
+function shortName(l){ return l.type==="colectivo" ? l.name.replace("Colectivo ","") : l.type==="subte" ? (l.id==="P"?"PM":l.id) : l.name.replace("Tren ","").replace("Belgrano ","Belg. "); }
+function kind(l){ return l.type==="colectivo" ? "Colectivo" : l.type==="subte" ? (l.id==="P"?"Premetro":"Subte") : "Tren"; }
+function isLight(color){ return /#f2c300|#ffdd00/i.test(color); }
+function badge(l){ return `<span class="badge${isLight(l.color)?" light":""}" style="--c:${l.color}">${shortName(l)}</span>`; }
+function scoreOf(tries, opt){
+  const extra = isFinite(opt) ? Math.max(0, tries-opt) : 0;
+  return { extra, stars: extra===0 ? 5 : extra===1 ? 4 : extra<=3 ? 3 : extra<=5 ? 2 : 1 };
+}
+const starRow = n => "★".repeat(n)+"☆".repeat(5-n);
+function updateScore(pulse=true){
+  const n = game.done ? (game.result ? game.result.stars : 0) : scoreOf(game.help + Math.max(game.thrown.length, game.optimal), game.optimal).stars;
+  $("scoreNow").textContent = starRow(n);
+  $("scoreTab").setAttribute("aria-label", `${n} de 5 estrellas`);
+  if (pulse){ $("scoreTab").classList.remove("pulse"); void $("scoreTab").offsetWidth; $("scoreTab").classList.add("pulse"); }
+}
+let sugg=[], suggOn=0;
+function searchLines(q){
+  const t=norm(q).replace(/^(linea|subte|tren|colectivo|bondi)\s+/,""); if(!t) return [];
+  const score = l => { const n=norm(l.name), keys=[n,...l.aliases];
+    if (keys.includes(t)) return 0; if (keys.some(k=>k.startsWith(t))) return 1; if (n.includes(t)) return 2; return 9; };
+  return LINES.map(l=>[score(l),l]).filter(x=>x[0]<9)
+    .sort((a,b)=>a[0]-b[0]||a[1].name.length-b[1].name.length||a[1].name.localeCompare(b[1].name,"es",{numeric:true}))
+    .slice(0,8).map(x=>{ x[1]._score=x[0]; return x[1]; });
+}
+function updateMatch(){ sugg=searchLines($("lineInput").value); suggOn=0; showMatch(); }
+function showMatch(){
+  const v=$("lineInput").value.trim();
+  $("match").textContent = !v ? "Tecleá el número o elegí subte / tren"
+    : sugg.length ? `→ ${sugg[suggOn].name}${sugg.length>1?`   (${suggOn+1}/${sugg.length})`:""}` : "No hay líneas con ese número";
+}
+function resolveLine(text){
+  const t=norm(text).replace(/^(linea|subte|tren|colectivo|bondi)\s+/, "");
+  return byAlias.get(norm(text)) || byAlias.get(t) || null;
+}
+const KEYS = {
+  num: ["1","2","3","4","5","6","7","8","9",{back:1},"0",{go:1}],
+  subte: [["A","Subte A"],["B","Subte B"],["C","Subte C"],["D","Subte D"],["E","Subte E"],["H","Subte H"],["PM","Premetro"],{back:1},{go:1}],
+  tren: [["Mitre","Tren Mitre"],["Sarmiento","Tren Sarmiento"],["Roca","Tren Roca"],["San Martín","Tren San Martín"],["Belg. Norte","Tren Belgrano Norte"],["Belg. Sur","Tren Belgrano Sur"],["Urquiza","Tren Urquiza"],["Costa","Tren de la Costa"],{go:1}],
+};
+const SUBTE_COL={ A:"#1aa7dd", B:"#e0402c", C:"#2050a8", D:"#13795a", E:"#6c2d8e", H:"#f2bd16", P:"#f39a2c" };
+let mode="num";
+function renderKeypad(){
+  $("keypad").innerHTML = KEYS[mode].map(k => {
+    if (k.back) return `<button type="button" class="key" data-k="back" aria-label="Borrar"><svg><use href="#i-back"/></svg></button>`;
+    if (k.go) return `<button type="button" class="key go" data-k="go">TIRAR</button>`;
+    if (Array.isArray(k) && mode==="subte"){ const L=k[0]==="PM"?"P":k[0];
+      return `<button type="button" class="key sub" data-set="${k[1]}" aria-label="${k[1]}"><span class="sbt" style="--c:${SUBTE_COL[L]}">${L}</span></button>`; }
+    if (Array.isArray(k)) return `<button type="button" class="key${k[0].length>2?" small":""}" data-set="${k[1]}">${k[0]}</button>`;
+    return `<button type="button" class="key" data-k="${k}">${k}</button>`;
+  }).join("");
+  document.querySelectorAll(".modes button").forEach(b=>b.setAttribute("aria-pressed", b.dataset.mode===mode));
+}
+$("keypad").addEventListener("click", e => {
+  const b=e.target.closest("button"); if (!b || game.done) return;
+  const inp=$("lineInput");
+  if (b.dataset.set){ inp.value=b.dataset.set; updateMatch(); return throwLine(); }
+  if (b.dataset.k==="back") inp.value=inp.value.slice(0,-1);
+  else if (b.dataset.k==="go") return throwLine();
+  else inp.value=(inp.value+b.dataset.k).slice(0,24);
+  updateMatch();
+});
+document.querySelector(".modes").addEventListener("click", e => { const b=e.target.closest("button"); if (b){ mode=b.dataset.mode; renderKeypad(); } });
+$("lineInput").addEventListener("input", updateMatch);
+$("lineInput").addEventListener("keydown", e => {
+  if ((e.key==="ArrowDown"||e.key==="ArrowUp") && sugg.length){ e.preventDefault(); suggOn=(suggOn+(e.key==="ArrowDown"?1:-1)+sugg.length)%sugg.length; showMatch(); }
+});
+$("lineForm").addEventListener("submit", e => { e.preventDefault(); throwLine(); });
+function throwLine(){
+  if (game.done) return;
+  const raw=$("lineInput").value.trim(); if (!raw) return say("Primero tecleá una línea.", true);
+  const line = (suggOn>0 && sugg[suggOn]) || resolveLine(raw) || (sugg[0] && sugg[0]._score<=1 ? sugg[0] : null);
+  const clear=()=>{ $("lineInput").value=""; updateMatch(); };
+  if (!line){ clear(); return say(`No existe la línea "${raw}".`, true); }
+  if (game.thrown.includes(line)){ clear(); return say(`Ya tiraste el ${shortName(line)}.`, true); }
+  if (game.tries>=game.maxTries) return say("No te quedan intentos.", true);
+  game.thrown.push(line); game.tries++;
+  const m=rateLine(line); game.marks.set(line.idx, m); game.trail.push(m);
+  drawLine(line);
+  $("lineInput").value=""; updateMatch();
+  const links=describeLinks(line);
+  say(!clip(line).stops.length ? `${line.name} no pasa cerca de A ni de B.` :
+      `${line.name} ${MARK_SAY[m]}. ` + (links.length ? (j=>j[0].toUpperCase()+j.slice(1))(links.join(", "))+"." : "Todavía no toca nada."));
+  refreshLinks(); refreshDots(); checkWin(); render(); updateTries();
+  if (!game.done && game.tries>=game.maxTries) return loseGame();
+  if (!game.done && clip(line).stops.length){
+    const { adj }=buildGraph(), miss=[];
+    if (!adj.get("A").length) miss.push("A"); if (!adj.get("B").length) miss.push("B");
+    say($("status").textContent+" Falta "+(miss.length ? "llegar a "+miss.join(" y a ") : "unir los recorridos")+".");
+  }
+}
+function drawLine(line){
+  const g=L.layerGroup(), big=line.type!=="colectivo", c=line;
+  for (const p of c.paths){
+    g.addLayer(L.polyline(p, { color:"#fff", weight:big?7:5.5, opacity:.85, interactive:false }));
+    g.addLayer(L.polyline(p, { color:line.color, weight:big?4:3, opacity:1 }).bindTooltip(line.name, { sticky:true }));
+  }
+  if (big) for (const st of c.stops) g.addLayer(L.circleMarker(st, { radius:2.6, color:line.color, weight:1.5, fillColor:"#fff", fillOpacity:1, interactive:false }));
+  g.addTo(linesLayer); game.layers.set(line.idx, g);
+}
+function pathDist(line, p){
+  let best=Infinity;
+  const xy=q=>[(q[1]-p[1])*111320*COSLAT, (q[0]-p[0])*111320];
+  for (const path of clip(line).paths) for (let i=1;i<path.length;i++){
+    const [ax,ay]=xy(path[i-1]), [bx,by]=xy(path[i]), dx=bx-ax, dy=by-ay, L2=dx*dx+dy*dy;
+    const t=L2 ? Math.max(0, Math.min(1, -(ax*dx+ay*dy)/L2)) : 0;
+    best=Math.min(best, Math.hypot(ax+t*dx, ay+t*dy));
+  }
+  return best;
+}
+const km = m => m<1000 ? Math.round(m/10)*10+" m" : (m/1000).toFixed(1).replace(".",",")+" km";
+function describeLinks(line){
+  const out=[];
+  for (const [k,pt] of [["A",game.A],["B",game.B]]){
+    const st=closestStop(line, pt).d;
+    if (st<=WALK) out.push("llega a "+k);
+    else if (pathDist(line, pt)<=WALK) out.push(`pasa cerca de ${k} pero no para (la parada más cercana está a ${km(st)})`);
+  }
+  for (const o of game.thrown) if (o!==line && bestTransfer(line,o)) out.push("combina con el "+shortName(o));
+  return out;
+}
+function buildGraph(){
+  const adj=new Map([["A",[]],["B",[]]]), edges=[];
+  const add=(u,v,info)=>{ adj.get(u).push(v); adj.get(v).push(u); edges.push({u,v,...info}); };
+  for (const l of game.thrown) adj.set(l.idx, []);
+  for (const l of game.thrown) for (const [key,pt] of [["A",game.A],["B",game.B]]){
+    const c=closestStop(l, pt); if (c.d<=WALK) add(key, l.idx, { from:pt, to:c.stop, d:c.d, walk:true, at:{[l.idx]:c.stop} });
+  }
+  for (let i=0;i<game.thrown.length;i++) for (let j=i+1;j<game.thrown.length;j++){
+    const a=game.thrown[i], b=game.thrown[j], t=bestTransfer(a,b);
+    if (t) add(a.idx, b.idx, { from:t.a, to:t.b, d:t.d, walk:false, at:{[a.idx]:t.a, [b.idx]:t.b} });
+  }
+  return { adj, edges };
+}
+function shortestPath(adj){
+  const prev=new Map([["A",null]]), q=["A"];
+  while(q.length){ const u=q.shift(); if(u==="B") break; for(const v of adj.get(u)) if(!prev.has(v)){ prev.set(v,u); q.push(v);} }
+  if (!prev.has("B")) return null;
+  const path=[]; for(let u="B"; u!==null; u=prev.get(u)) path.unshift(u); return path;
+}
+function refreshLinks(){
+  linksLayer.clearLayers();
+  const { adj, edges }=buildGraph(), path=shortestPath(adj), onPath=new Set(path||[]);
+  const hotEdge=(u,v)=>path && path.some((x,i)=>i<path.length-1 && ((x===u&&path[i+1]===v)||(x===v&&path[i+1]===u)));
+  for (const e of edges){
+    const hot=hotEdge(e.u,e.v);
+    linksLayer.addLayer(L.polyline([e.from,e.to], { color:INK, weight:2, dashArray:"1 5", lineCap:"round", interactive:false }));
+    const at=e.walk ? e.to : [(e.from[0]+e.to[0])/2,(e.from[1]+e.to[1])/2];
+    const label=e.walk ? `${Math.round(e.d)} m a pie` : `Combinación ${shortName(LINES[e.u])} ↔ ${shortName(LINES[e.v])} · ${Math.round(e.d)} m`;
+    linksLayer.addLayer(L.circleMarker(at, { radius:hot?5.5:4.5, color:INK, weight:1.5, fillColor:hot?"#f4e44a":"#fff", fillOpacity:1 }).bindTooltip(label));
+  }
+  for (const [idx,g] of game.layers){ const used=!path||onPath.has(idx); g.eachLayer(l=>l.setStyle&&l.setStyle({ opacity:used?1:.35 })); }
+  game.path=path; game.edges=edges;
+}
+function refreshDots(){
+  const { adj }=game.thrown.length ? buildGraph() : { adj:new Map([["A",[]],["B",[]]]) };
+  $("dotA").classList.toggle("on", adj.get("A").length>0); $("dotB").classList.toggle("on", adj.get("B").length>0);
+  $("dotA").classList.toggle("blink", !!game.done); $("dotB").classList.toggle("blink", !!game.done);
+}
+(function xpScroll(){
+  const body=$("consoleBody"), bar=$("xpScroll"), track=bar.querySelector(".xs-track"), thumb=bar.querySelector(".xs-thumb");
+  function sync(){
+    const H=body.scrollHeight, h=body.clientHeight, T=track.clientHeight;
+    bar.classList.toggle("off", H<=h+1);
+    const th=Math.max(24, T*h/H), max=T-th, top=H>h ? body.scrollTop/(H-h)*max : 0;
+    thumb.style.height=th+"px"; thumb.style.transform=`translateY(${top}px)`;
+  }
+  body.addEventListener("scroll", sync, { passive:true });
+  new ResizeObserver(sync).observe(body); new MutationObserver(sync).observe(body, { childList:true, subtree:true, characterData:true });
+  let rep=null;
+  const hold=dy=>{ body.scrollBy({ top:dy }); clearInterval(rep); rep=setInterval(()=>body.scrollBy({ top:dy }), 80); };
+  const stop=()=>clearInterval(rep);
+  bar.querySelector(".up").addEventListener("pointerdown", e=>{ e.preventDefault(); hold(-40); });
+  bar.querySelector(".down").addEventListener("pointerdown", e=>{ e.preventDefault(); hold(40); });
+  addEventListener("pointerup", stop); addEventListener("pointercancel", stop);
+  track.addEventListener("pointerdown", e=>{
+    if (e.target.closest(".xs-thumb")) return;
+    const r=thumb.getBoundingClientRect(); body.scrollBy({ top:(e.clientY<r.top?-1:1)*body.clientHeight*.9 });
+  });
+  thumb.addEventListener("pointerdown", e=>{
+    e.preventDefault(); thumb.setPointerCapture(e.pointerId); thumb.classList.add("drag");
+    const y0=e.clientY, s0=body.scrollTop, ratio=(body.scrollHeight-body.clientHeight)/Math.max(1, track.clientHeight-thumb.offsetHeight);
+    const move=ev=>{ body.scrollTop=s0+(ev.clientY-y0)*ratio; };
+    const up=()=>{ thumb.classList.remove("drag"); thumb.removeEventListener("pointermove", move); thumb.removeEventListener("pointerup", up); };
+    thumb.addEventListener("pointermove", move); thumb.addEventListener("pointerup", up);
+  });
+  sync();
+})();
+const SOUNDS = { bocina:new Audio("sonidos/bocina.mp3"), chiflido:new Audio("sonidos/chiflido.mp3") };
+let vol=.5; try { const v=parseFloat(localStorage.getItem("comollego-vol")); if (v>=0 && v<=1) vol=v; } catch {}
+function setVol(v){ vol=v; for (const a of Object.values(SOUNDS)) a.volume=v; $("volRange").value=Math.round(v*100); $("volVal").textContent=Math.round(v*100)+"%"; try { localStorage.setItem("comollego-vol", String(v)); } catch {} }
+for (const a of Object.values(SOUNDS)) a.preload="auto";
+$("volRange").oninput=e=>setVol(e.target.value/100); setVol(vol);
+let muted=false; try { muted = localStorage.getItem("comollego-mute")==="1"; } catch {}
+function setMuted(m){ muted=m; $("muteBtn").setAttribute("aria-pressed", m); const t=m?"Activar sonidos":"Silenciar sonidos"; $("muteBtn").title=t; $("muteBtn").setAttribute("aria-label",t); try { localStorage.setItem("comollego-mute", m?"1":"0"); } catch {} $("muteChk").checked=m; if (m) for (const a of Object.values(SOUNDS)) a.pause(); }
+$("muteBtn").onclick=()=>setMuted(!muted); $("muteChk").onchange=e=>setMuted(e.target.checked); setMuted(muted);
+function playSound(k){ const a=SOUNDS[k]; if (!a || muted) return; try { a.currentTime=0; a.play().catch(()=>{}); } catch {} }
+function checkWin(){
+  if (!game.path || game.done) return;
+  game.done=true;
+  const used=game.path.filter(x=>x!=="A"&&x!=="B").map(i=>LINES[i]);
+  const s=scoreOf(game.tries, game.optimal);
+  const edgeAt=(u,v,line)=>game.edges.find(e=>(e.u===u&&e.v===v)||(e.u===v&&e.v===u)).at[line];
+  const pts=[game.A, game.B];
+  for (const g of game.layers.values()) g.eachLayer(l=>l.setStyle&&l.setStyle({ opacity:.15 }));
+  game.path.forEach((node,k)=>{
+    if (node==="A"||node==="B") return;
+    const line=LINES[node], on=edgeAt(game.path[k-1],node,node), off=edgeAt(node,game.path[k+1],node);
+    for (const seg of subPath(clip(line).paths, on, off)){
+      winLayer.addLayer(L.polyline(seg, { color:"#fff", weight:9, opacity:1, interactive:false }));
+      winLayer.addLayer(L.polyline(seg, { color:line.color, weight:5, opacity:1 }).bindTooltip(line.name, { sticky:true }));
+      pts.push(...seg);
+    }
+    for (const p of [on,off]) winLayer.addLayer(L.circleMarker(p, { radius:4.5, color:INK, weight:1.5, fillColor:"#fff", fillOpacity:1 }));
+  });
+  fit(L.latLngBounds(pts).pad(0.08), true);
+  const verdict = s.extra===0 ? "Perfecto: con los intentos justos." :
+    `${game.tries} intentos. Se podía con ${game.optimal} línea${game.optimal>1?"s":""}.`;
+  const now=new Date(), stamp=now.toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit"});
+  $("winBody").innerHTML = `<div class="ticket">
+      <header><strong>¡Llegaste!</strong><span>${game.day?"#"+game.day+" · ":""}${stamp}</span></header>
+      ${routeHTML(used)}
+      ${starsHTML(s.stars)}
+      <p class="verdict">${verdict}</p>
+      ${trailHTML()}
+    </div>
+    ${endButtons()}
+    ${subeHTML()}`;
+  finish({ won:true, stars:s.stars });
+  playSound(s.extra===0 ? "bocina" : "chiflido");
+  say(`¡Llegaste en ${game.tries} intento${game.tries>1?"s":""}! ${s.stars} de 5 estrellas.`);
+}
+const routeHTML = lines => `<div class="route"><span class="tag a">A</span>${lines.map(l=>`<svg class="arrow"><use href="#i-arrow"/></svg>${badge(l)}`).join("")}<svg class="arrow"><use href="#i-arrow"/></svg><span class="tag b">B</span></div>`;
+const subeHTML = () => `<a class="subebtn" href="https://cafecito.app/amatosaurio" target="_blank" rel="noopener" aria-label="Cargame la SUBE: invitame un cafecito en cafecito.app (se abre en otra pestaña)"><i class="led" aria-hidden="true"></i><span aria-hidden="true"><strong>¿Te copó? Cargame la SUBE</strong><small>Un cafecito banca que el juego siga andando</small></span></a>`;
+const starsHTML = n => `<div class="stars" role="img" aria-label="${n} de 5 estrellas">${[1,2,3,4,5].map(i=>`<svg class="${i<=n?"on":""}"><use href="#i-star"/></svg>`).join("")}</div>`;
+function trailHTML(){ return `<div class="trail" aria-label="Intentos">${game.trail.map(m=>`<i class="${m}" title="${MARK[m]}"></i>`).join("")}</div>`; }
+function endButtons(){
+  if (game.mode==="dia" && game.leg<LEGS-1) return `<div class="row">
+      <button class="btn hot wide" type="button" id="nextLeg">Siguiente tramo: ${esc(daily.pts[game.leg+1][0])} → ?</button>
+      <button class="btn" type="button" id="optBtn"${game.optRoute?"":" disabled"}><svg><use href="#d-opt"/></svg>Ver óptima</button>
+    </div>`;
+  if (game.mode==="dia") return `<div class="row">
+      <button class="btn hot wide" type="button" id="shareBtn">Compartir resultado</button>
+      <button class="btn" type="button" id="optBtn"${game.optRoute?"":" disabled"}><svg><use href="#d-opt"/></svg>Ver óptima</button>
+      <button class="btn" type="button" id="rankOpen"><svg><use href="#d-rank"/></svg>Ranking</button>
+    </div>`;
+  return `<div class="row">
+      <button class="btn hot wide" type="button" id="shareBtn">Compartir resultado</button>
+      <button class="btn" type="button" id="optBtn"${game.optRoute?"":" disabled"}><svg><use href="#d-opt"/></svg>Ver óptima</button>
+      <button class="btn" type="button" id="againBtn"><svg><use href="#d-new"/></svg>Otro viaje</button>
+    </div>`;
+}
+function finish(res){
+  game.result=res;
+  if (game.saveKey && !loadSaved(game.saveKey)){
+    try { localStorage.setItem(game.saveKey, JSON.stringify({ ...res, tries:game.tries, max:game.maxTries, trail:game.trail.join("") })); } catch {}
+  }
+  if (game.mode==="dia"){
+    const isNew=recordLeg(res);
+    const t=$("winBody").querySelector(".ticket");
+    t.querySelector("header span").textContent=`#${game.day} · Tramo ${game.leg+1} de ${LEGS}`;
+    if (game.leg===LEGS-1 && daily.rec.complete){
+      t.insertAdjacentHTML("beforeend", legSummaryHTML());
+      if (isNew) onDailyComplete();
+      $("winBody").querySelector(".subebtn").insertAdjacentHTML("beforebegin", rankPromptHTML());
+    }
+  }
+  openOverlay("winOverlay");
+  $("controls").hidden=true; $("lineInput").disabled=true; $("optDock").disabled=!game.optRoute;
+  const on=(id,f)=>{ const b=$(id); if (b) b.onclick=f; };
+  on("againBtn", randomGame); on("nextLeg", ()=>startLeg(game.leg+1));
+  on("optBtn", ()=>{ closeOverlay("winOverlay"); showOptimal(); });
+  on("shareBtn", share); on("rankOpen", ()=>{ closeOverlay("winOverlay"); openRank("hoy"); });
+  on("rankJoin", ()=>{ closeOverlay("winOverlay"); openRank("ficha"); });
+  refreshDots(); render(); updateTries();
+}
+function loseGame(){
+  game.done=true; game.lost=true;
+  $("winTitle").textContent="Boleto";
+  $("winBody").innerHTML = `<div class="ticket">
+      <header><strong>Sin intentos</strong><span>${game.day?"#"+game.day:MODE_TITLE[game.mode]}</span></header>
+      <p class="verdict" style="margin:0 0 10px">No llegaste. ${game.optRoute ? "Se podía así:" : ""}</p>
+      ${game.optRoute ? routeHTML(game.optRoute.map(i=>LINES[i])) : ""}
+      ${trailHTML()}
+    </div>
+    ${endButtons()}`;
+  finish({ won:false, stars:0 });
+  showOptimal();
+  say("Te quedaste sin intentos. Mirá la ruta óptima en el plano.");
+}
+async function share(){
+  if (game.mode==="dia" && daily.rec.complete){
+    const r=daily.rec, text=`Guiame #${daily.n} · ${LEGS} tramos\n${r.legs.map(l=>[...l.trail].map(m=>EMOJI[m]).join("")+(l.won?"":" ❌")).join("\n")}\n${r.stars}/${LEGS*5} ⭐ · ${r.tries} intentos\n${location.origin}${location.pathname}`;
+    try {
+      if (navigator.share && matchMedia("(pointer:coarse)").matches) await navigator.share({ text });
+      else { await navigator.clipboard.writeText(text); $("shareBtn").textContent="¡Copiado!"; }
+    } catch {}
+    return;
+  }
+  const head = game.mode==="dia" ? `Guiame #${game.day}` : game.mode==="barrio" ? `Guiame #${game.day} · ${MODE_TITLE[game.zone]}` : `Guiame (${MODE_TITLE[game.mode]})`;
+  const r=game.result, res = r.won ? starRow(r.stars) : "no llegué";
+  const text = `${head}\n${game.nameA} → ${game.nameB}\n${game.trail.map(m=>EMOJI[m]).join("")} ${game.tries}/${game.maxTries} · ${res}\n${location.origin}${location.pathname}`;
+  try {
+    if (navigator.share && matchMedia("(pointer:coarse)").matches) await navigator.share({ text });
+    else { await navigator.clipboard.writeText(text); $("shareBtn").textContent="¡Copiado!"; }
+  } catch {}
+}
+function showOptimal(){
+  optLayer.clearLayers();
+  const r=game.optRoute; if (!r) return;
+  const pts=[game.A, game.B], lines=r.map(i=>LINES[i]);
+  const stops=[closestStop(lines[0], game.A).stop];
+  for (let i=0;i<lines.length-1;i++){ const t=bestTransfer(lines[i],lines[i+1]); stops.push(t.a, t.b); }
+  stops.push(closestStop(lines[lines.length-1], game.B).stop);
+  lines.forEach((l,i)=>{
+    for (const seg of subPath(clip(l).paths, stops[2*i], stops[2*i+1])){
+      optLayer.addLayer(L.polyline(seg, { color:"#fff", weight:7, opacity:1, interactive:false }));
+      optLayer.addLayer(L.polyline(seg, { color:l.color, weight:3.5, dashArray:"8 6", opacity:1 }).bindTooltip("Óptima: "+l.name, { sticky:true }));
+      pts.push(...seg);
+    }
+  });
+  fit(L.latLngBounds(pts).pad(0.08), true);
+  say("Ruta óptima: "+lines.map(l=>l.name).join(" → "));
+}
+function removeLine(idx){
+  if (game.lost) return;
+  if (game.done){ game.done=false; winLayer.clearLayers(); optLayer.clearLayers(); closeOverlay("winOverlay"); $("controls").hidden=false; $("lineInput").disabled=false; $("optDock").disabled=true; updateScore(false); }
+  game.thrown=game.thrown.filter(l=>l.idx!==idx);
+  linesLayer.removeLayer(game.layers.get(idx)); game.layers.delete(idx);
+  refreshLinks(); refreshDots(); checkWin(); render();
+  if (!game.done) say(`Línea sacada. Los intentos no se devuelven (${game.tries}/${game.maxTries}).`);
+}
+function render(){
+  $("count").textContent=`${game.tries} de ${game.maxTries} intentos`;
+  $("emptyMsg").hidden=game.thrown.length>0;
+  const used=new Set(game.path||[]);
+  $("thrown").innerHTML=game.thrown.map(l=>{
+    const st=closestStop(l, game.A).stop || clip(l).stops[0];
+    const m=game.marks.get(l.idx)||"r";
+    return `<div class="gcell ${m}${used.has(l.idx)?" used":""}"><span class="sw" style="background:${l.color}"></span>
+      <div class="num${shortName(l).length>5?" long":""}">${shortName(l)}</div>
+      <div class="meta">${kind(l)} · ${st?planoOf(st):""}</div>
+      <span class="mark">${MARK[m]}</span>
+      <button class="rm" type="button" data-idx="${l.idx}" aria-label="Sacar ${l.name}"><svg><use href="#i-x"/></svg></button></div>`;
+  }).join("");
+}
+$("thrown").addEventListener("click", e=>{ const b=e.target.closest(".rm"); if (b) removeLine(Number(b.dataset.idx)); });
+function esc(s){ return String(s??"").replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+const DIV_NAME = ["","Primera División","Primera Nacional","Primera B Metropolitana","Primera C"];
+const CLUBS = (window.CLUBES_DATA||[]).map(([id,name,div,zona,sp,tit=0,sub=0])=>({ id, name, div, zona, sp, tit, sub, key:norm(name) }));
+const CLUB = Object.fromEntries(CLUBS.map(c=>[c.id,c]));
+const crestImg = (id, cls="crest") => {
+  const c=CLUB[id];
+  if (!c) return `<span class="${cls} none" aria-hidden="true"></span>`;
+  if (c.sp<0) return `<span class="${cls} gen" title="${esc(c.name)}" aria-hidden="true">${esc(c.name[0])}</span>`;
+  return `<span class="${cls}" style="--i:${c.sp}" title="${esc(c.name)}" aria-hidden="true"></span>`;
+};
+function clubOrder(zona){
+  return CLUBS.slice().sort((a,b)=>a.div-b.div
+    || (a.div===1 ? b.tit-a.tit || b.sub-a.sub : 0)
+    || (b.zona===zona)-(a.zona===zona) || a.name.localeCompare(b.name,"es"));
+}
+const PROF_KEY="comollego-perfil", BEST_KEY="comollego-mejor-racha";
+const ZONA_OPTS = [["capital","Capital"],["norte","Zona Norte"],["noroeste","Noroeste"],["oeste","Zona Oeste"],["sur","Zona Sur"],["laplata","La Plata"],["otra","Otro lugar"]];
+const ZONA_NAME = Object.fromEntries(ZONA_OPTS);
+let profile = loadSaved(PROF_KEY);
+const cleanName = s => String(s||"").replace(/[<>]/g,"").replace(/\s+/g," ").trim().slice(0,18);
+function streakInfo(){
+  const t=todayNum(), ok=n=>{ const r=loadSaved(D3KEY(n)); return !!(r && r.complete); };
+  let s=0, n=ok(t)?t:t-1; while (n>=1 && ok(n)){ s++; n--; }
+  let best=Number(localStorage.getItem(BEST_KEY))||0; if (s>best){ best=s; try { localStorage.setItem(BEST_KEY, String(best)); } catch {} }
+  return { streak:s, best, last: ok(t)?t:(s?t-1:0) };
+}
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyB_Uo_94vbBg6wIo2QNMknyvE99vMBmd6s",
+  authDomain: "guia-me-ecf8a.firebaseapp.com",
+  projectId: "guia-me-ecf8a",
+  storageBucket: "guia-me-ecf8a.firebasestorage.app",
+  messagingSenderId: "271471025849",
+  appId: "1:271471025849:web:de549fc2c0c4601ce24568",
+};
+const FB_V="10.12.2";
+let fbBase=null, fbUser=null;
+function fbLoad(){
+  if (!FIREBASE_CONFIG) return Promise.resolve(null);
+  if (!fbBase) fbBase = Promise.all([
+      import(`https://www.gstatic.com/firebasejs/${FB_V}/firebase-app.js`),
+      import(`https://www.gstatic.com/firebasejs/${FB_V}/firebase-firestore.js`)])
+    .then(([app, fs])=>{ const a=app.initializeApp(FIREBASE_CONFIG); return { app:a, fs, db:fs.getFirestore(a) }; })
+    .catch(()=>null);
+  return fbBase;
+}
+async function fbAuth(){
+  const fb=await fbLoad(); if (!fb) return null;
+  if (!fbUser) fbUser = import(`https://www.gstatic.com/firebasejs/${FB_V}/firebase-auth.js`)
+    .then(async au=>{ const auth=au.getAuth(fb.app); const c=await au.signInAnonymously(auth); return c.user.uid; })
+    .catch(()=>{ fbUser=null; return null; });
+  const uid=await fbUser; return uid ? { ...fb, uid } : null;
+}
+async function loadChallenge(n){
+  const fb=await fbLoad();
+  if (fb) try {
+    const snap=await fb.fs.getDoc(fb.fs.doc(fb.db, "challenges", String(n)));
+    if (snap.exists()) return snap.data().p.map(o=>[o.n, o.lat, o.lon]);
+  } catch {}
+  return pickChain(seeded(n));
+}
+async function pushScore(){
+  const r=daily && daily.rec;
+  if (!profile || !r || !r.complete || r.sent) return;
+  const fb=await fbAuth(); if (!fb) return;
+  const { fs, db, uid }=fb, st=streakInfo(), who={ name:profile.name, zona:profile.zona, club:profile.club||"" };
+  try {
+    await fs.setDoc(fs.doc(db, "daily", String(daily.n), "scores", uid),
+      { ...who, stars:r.stars, tries:r.tries, pts:r.stars*100+(LEGS*MAX_TRIES-r.tries), ts:fs.serverTimestamp() });
+    r.sent=true; try { localStorage.setItem(D3KEY(daily.n), JSON.stringify(r)); } catch {}
+  } catch {}
+  try { await fs.setDoc(fs.doc(db, "players", uid), { ...who, streak:st.streak, best:st.best, last:st.last, ts:fs.serverTimestamp() }); } catch {}
+}
+async function pushProfile(){
+  const fb=await fbAuth(); if (!fb || !profile) return;
+  const { fs, db, uid }=fb, st=streakInfo(), who={ name:profile.name, zona:profile.zona, club:profile.club||"" };
+  try { await fs.setDoc(fs.doc(db, "players", uid), { ...who, streak:st.streak, best:st.best, last:st.last, ts:fs.serverTimestamp() }); } catch {}
+  if (daily && daily.rec.sent) try { await fs.updateDoc(fs.doc(db, "daily", String(daily.n), "scores", uid), who); } catch {}
+}
+function onDailyComplete(){ streakInfo(); pushScore(); }
+function rankPromptHTML(){
+  const st=streakInfo();
+  return profile
+    ? `<p class="rank-note">${FIREBASE_CONFIG ? "Quedaste anotado en el ranking de hoy." : "Tu resultado quedó guardado."} Racha: <b>${st.streak} día${st.streak===1?"":"s"}</b>.</p>`
+    : `<button class="btn wide rank-join" type="button" id="rankJoin"><svg><use href="#d-rank"/></svg>Anotate en el ranking: nombre, zona y cuadro</button>`;
+}
+let rankTab="hoy";
+function rowHTML(i, e, right, me){
+  return `<li class="rrow${me?" me":""}"><span class="pos">${i+1}</span>${crestImg(e.club)}<span class="who"><b>${esc(e.name)}</b><small>${esc(ZONA_NAME[e.zona]||"")}${e.club && CLUB[e.club] ? " · "+esc(CLUB[e.club].name) : ""}</small></span><span class="val">${right}</span></li>`;
+}
+async function renderRank(){
+  const box=$("rankBody"), n=todayNum();
+  document.querySelectorAll("#rankTabs [data-tab]").forEach(b=>b.setAttribute("aria-selected", b.dataset.tab===rankTab));
+  if (rankTab==="ficha") return renderFicha();
+  const me=profile ? { name:profile.name, zona:profile.zona, club:profile.club } : { name:"Vos", zona:"", club:"" };
+  if (!FIREBASE_CONFIG){
+    const r=loadSaved(D3KEY(n)), st=streakInfo();
+    box.innerHTML = `<p class="hint">El ranking online todavía no está conectado. Por ahora ves solo lo tuyo.</p><ol class="rlist">${
+      rankTab==="hoy" ? (r && r.complete ? rowHTML(0, me, `${r.stars}★ <small>${r.tries} int.</small>`, true) : `<li class="rempty">Todavía no completaste el desafío #${n}.</li>`)
+                      : rowHTML(0, me, `${st.streak} <small>día${st.streak===1?"":"s"}</small>`, true)}</ol>`;
+    return;
+  }
+  box.innerHTML = `<p class="hint">Cargando…</p>`;
+  const fb=await fbAuth();
+  if (!fb){ box.innerHTML=`<p class="hint">No se pudo conectar con el ranking. Probá de nuevo en un rato.</p>`; return; }
+  const { fs, db, uid }=fb;
+  try {
+    if (rankTab==="hoy"){
+      const q=fs.query(fs.collection(db, "daily", String(n), "scores"), fs.orderBy("pts","desc"), fs.limit(50));
+      const list=(await fs.getDocs(q)).docs.map(d=>({ id:d.id, ...d.data() }));
+      list.sort((a,b)=>b.pts-a.pts || (a.ts?.seconds||0)-(b.ts?.seconds||0));
+      box.innerHTML = `<p class="hint">Desafío #${n}: estrellas de los ${LEGS} tramos; si empatan, gana el de menos intentos.</p>
+        <ol class="rlist">${list.length ? list.map((e,i)=>rowHTML(i, e, `${e.stars}★ <small>${e.tries} int.</small>`, e.id===uid)).join("") : `<li class="rempty">Nadie completó el desafío de hoy todavía. ¡Sé el primero!</li>`}</ol>`;
+    } else {
+      const q=fs.query(fs.collection(db, "players"), fs.orderBy("streak","desc"), fs.limit(80));
+      const list=(await fs.getDocs(q)).docs.map(d=>({ id:d.id, ...d.data() })).filter(e=>e.streak>0 && e.last>=n-1).slice(0,50);
+      box.innerHTML = `<p class="hint">Días seguidos completando el desafío diario.</p>
+        <ol class="rlist">${list.length ? list.map((e,i)=>rowHTML(i, e, `${e.streak} <small>día${e.streak===1?"":"s"}</small>`, e.id===uid)).join("") : `<li class="rempty">Todavía no hay rachas.</li>`}</ol>`;
+    }
+  } catch { box.innerHTML=`<p class="hint">No se pudo cargar el ranking. Probá de nuevo en un rato.</p>`; }
+}
+function renderFicha(){
+  const p=profile||{ name:"", zona:homeZone||"", club:"" };
+  $("rankBody").innerHTML = `<form class="ficha" id="fichaForm" novalidate>
+      <label class="fld"><span>Nombre</span><input id="fName" maxlength="18" autocomplete="nickname" value="${esc(p.name)}" placeholder="Cómo querés aparecer" required></label>
+      <label class="fld"><span>Zona</span><select id="fZona">${ZONA_OPTS.map(([k,v])=>`<option value="${k}"${k===p.zona?" selected":""}>${v}</option>`).join("")}</select></label>
+      <fieldset class="fld"><legend>Tu cuadro</legend>
+        <div class="clubpick">
+          <div class="clubsel" id="fClubSel"></div>
+          <input id="fClubQ" type="search" placeholder="Buscá tu cuadro…" autocomplete="off" aria-label="Buscar club">
+          <div class="clubs" id="fClubs" role="radiogroup" aria-label="Tu cuadro"></div>
+        </div></fieldset>
+      <p class="hint small" id="fMsg" role="status"></p>
+      <div class="row"><button class="btn hot wide" type="submit">Guardar</button></div>
+      <p class="hint small">El nombre, la zona y el cuadro se muestran en el ranking público. No pongas tu nombre completo si no querés.</p>
+    </form>`;
+  let club=CLUB[p.club] ? p.club : "";
+  const btn = c => `<button type="button" class="club${club===c.id?" on":""}" data-club="${c.id}" role="radio" aria-checked="${club===c.id}">${crestImg(c.id,"crest big")}<span>${esc(c.name)}</span></button>`;
+  const showSel = () => { $("fClubSel").innerHTML = club ? `${crestImg(club,"crest big")}<span><small>Tu cuadro</small><b>${esc(CLUB[club].name)}</b></span><button type="button" class="btn" id="fClubNone">Ninguno</button>` : `<span class="crest big none"></span><span><small>Tu cuadro</small><b>Sin elegir</b></span>`;
+    const n=$("fClubNone"); if (n) n.onclick=()=>{ club=""; showSel(); list(); }; };
+  function list(){
+    const q=norm($("fClubQ").value), zona=$("fZona").value;
+    const cs=clubOrder(zona).filter(c=>!q || c.key.includes(q));
+    if (q){ $("fClubs").innerHTML = cs.length ? `<div class="cgrid">${cs.map(btn).join("")}</div>` : `<p class="hint small">No encontramos “${esc($("fClubQ").value)}”.</p>`; return; }
+    $("fClubs").innerHTML = DIV_NAME.map((t,d)=>{ const g=cs.filter(c=>c.div===d); return g.length ? `<h4>${t}</h4><div class="cgrid">${g.map(btn).join("")}</div>` : ""; }).join("");
+  }
+  $("fClubs").addEventListener("click", e=>{ const b=e.target.closest(".club"); if (!b) return; club=b.dataset.club; showSel(); list(); });
+  $("fClubQ").addEventListener("input", list);
+  $("fZona").addEventListener("change", list);
+  showSel(); list();
+  $("fichaForm").onsubmit=e=>{
+    e.preventDefault();
+    const name=cleanName($("fName").value);
+    if (!name){ $("fMsg").textContent="Poné un nombre para aparecer en el ranking."; $("fName").focus(); return; }
+    profile={ name, zona:$("fZona").value, club };
+    try { localStorage.setItem(PROF_KEY, JSON.stringify(profile)); } catch {}
+    pushProfile(); pushScore();
+    rankTab="hoy"; renderRank();
+  };
+}
+function openRank(tab){ rankTab = tab || (profile ? "hoy" : "ficha"); openOverlay("rankOverlay"); renderRank(); }
+$("rankBtn").onclick=()=>openRank();
+$("rankClose").onclick=()=>closeOverlay("rankOverlay");
+$("rankTabs").addEventListener("click", e=>{ const b=e.target.closest("[data-tab]"); if (b){ rankTab=b.dataset.tab; renderRank(); } });
+$("rankOverlay").addEventListener("click", e=>{ if (e.target.id==="rankOverlay") closeOverlay("rankOverlay"); });
+document.addEventListener("keydown", e=>{ if (e.key==="Escape") closeOverlay("rankOverlay"); });
+function openOverlay(id){ $(id).hidden=false; const f=$(id).querySelector("button"); f && f.focus(); }
+function closeOverlay(id){ $(id).hidden=true; }
+$("helpClose").onclick=()=>closeOverlay("helpOverlay");
+$("winClose").onclick=()=>closeOverlay("winOverlay");
+document.addEventListener("keydown", e=>{ if (e.key==="Escape"){ closeOverlay("helpOverlay"); closeOverlay("winOverlay"); closeOverlay("pickOverlay"); closeOverlay("homeOverlay"); if (!$("tutoOverlay").hidden) closeTuto(); } });
+for (const id of ["helpOverlay","winOverlay","pickOverlay","tutoOverlay","homeOverlay"]) $(id).addEventListener("click", e=>{ if (e.target.id===id) closeOverlay(id); });
+const HELP_COST = { A:1, B:1, tap:1, line:2 };
+const canHelp = n => game.maxTries-game.tries > n;
+function charge(n){ game.help+=n; game.tries+=n; for (let k=0;k<n;k++) game.trail.push("h"); updateTries(); updateScore(); render(); }
+function refreshHelpOpts(){
+  for (const b of document.querySelectorAll("#helpOpts .opt")) b.disabled = !canHelp(HELP_COST[b.dataset.help]);
+  if (!remainingHints().length) $("revealOpt").disabled=true;
+}
+function planoCard(p){
+  const ls=linesInCell(p);
+  const buses=ls.filter(l=>l.type==="colectivo").map(shortName).sort((a,b)=>a.localeCompare(b,"es",{numeric:true}));
+  const rails=ls.filter(l=>l.type!=="colectivo");
+  return `<div class="planocell"><header><b>Plano ${planoOf(p)}</b><span>${ls.length} línea${ls.length===1?"":"s"}</span></header>
+    <p>${buses.length ? buses.join(" - ") : "No pasan colectivos por este plano."}</p>
+    ${rails.length ? `<div class="rails">${rails.map(badge).join("")}</div>` : ""}</div>`;
+}
+function nearCard(which){
+  const p = which==="A" ? game.A : game.B;
+  zone = makeZone(game.A, game.B);
+  const ls=[...linesNear(p, WALK)].map(i=>LINES[i]);
+  const buses=ls.filter(l=>l.type==="colectivo").map(shortName).sort((a,b)=>a.localeCompare(b,"es",{numeric:true}));
+  const rails=ls.filter(l=>l.type!=="colectivo");
+  return `<div class="planocell"><header><b>Cerca de ${which}</b><span>a ${WALK} m · ${ls.length} línea${ls.length===1?"":"s"}</span></header>
+    <p>${buses.length ? buses.join(" - ") : "No pasan colectivos."}</p>
+    ${rails.length ? `<div class="rails">${rails.map(badge).join("")}</div>` : ""}</div>`;
+}
+const remainingHints = () => game.optRoute ? game.optRoute.filter(i=>!game.thrown.includes(LINES[i]) && !game.revealed.has(i)) : [];
+$("helpBtn").onclick=()=>{
+  if (game.done) return say("El viaje terminó. Empezá otro para pedir pistas.");
+  refreshHelpOpts();
+  if (!canHelp(1)) say("Te queda un solo intento: no alcanza para pedir una pista.", true);
+  openOverlay("helpOverlay");
+};
+$("helpOpts").addEventListener("click", e=>{
+  const b=e.target.closest("button"); if (!b || b.disabled) return;
+  const h=b.dataset.help; if (game.done || !canHelp(HELP_COST[h])) return;
+  if (h==="A"||h==="B"){ charge(1); $("helpAnswer").insertAdjacentHTML("afterbegin", nearCard(h)); }
+  else if (h==="tap"){ closeOverlay("helpOverlay"); cellPicking=true; map.getContainer().classList.add("cellpick"); say("Tocá un cuadro del plano para ver qué líneas pasan (1 intento)."); }
+  else if (h==="line"){
+    const left=remainingHints(); if (!left.length) return;
+    const i=left[0]; game.revealed.add(i); charge(2);
+    $("helpAnswer").insertAdjacentHTML("afterbegin", `<div class="planocell"><header><b>Pista</b><span>ruta óptima</span></header><p>Probá con ${badge(LINES[i])} ${LINES[i].name}.</p></div>`);
+  }
+  refreshHelpOpts();
+});
+$("pickBtn").onclick=()=>openOverlay("pickOverlay");
+$("pickClose").onclick=()=>closeOverlay("pickOverlay");
+$("pickOpts").addEventListener("click", e=>{
+  const b=e.target.closest("button[data-pick]"); if (!b) return;
+  closeOverlay("pickOverlay");
+  const k=b.dataset.pick;
+  if (k==="here") return hereGame();
+  if (k==="map") return pickOnMap();
+  if (k==="home") return openOverlay("homeOverlay");
+  zoneGame(k);
+});
+function hereGame(){
+  if (!navigator.geolocation) return say("Este navegador no comparte la ubicación.", true);
+  say("Buscando tu ubicación…");
+  navigator.geolocation.getCurrentPosition(pos=>{
+    const A=[pos.coords.latitude, pos.coords.longitude];
+    if (A[0]<-35.1 || A[0]>-34.3 || A[1]<-59.1 || A[1]>-57.8) return say("Estás fuera del AMBA: probá con Práctica o tocando el plano.", true);
+    if (!linesNear(A, WALK).size) return say("No hay paradas a menos de "+WALK+" m de donde estás. Probá tocando el plano.", true);
+    const cand=PLACES.filter(l=>{ const d=dist(A,[l[1],l[2]]); return d>2500 && d<12000; }).sort(()=>Math.random()-.5);
+    for (const b of cand.slice(0,60)){
+      const r=optimalRoute(A,[b[1],b[2]]);
+      if (r && r.length>=2) return startGame(A,[b[1],b[2]],"Tu ubicación",b[0],"aca");
+    }
+    say("No encontré un destino con ruta desde donde estás. Probá tocando el plano.", true);
+  }, err=>say(err.code===1 ? "No diste permiso para usar tu ubicación." : "No pude obtener tu ubicación.", true),
+  { enableHighAccuracy:true, timeout:12000, maximumAge:60000 });
+}
+function pickOnMap(){
+  picking={ step:"A" }; map.getContainer().classList.add("cellpick");
+  for (const l of [pointsLayer,linesLayer,linksLayer,winLayer,optLayer]) l.clearLayers();
+  closeOverlay("winOverlay"); $("controls").hidden=false;
+  say("Tocá el plano para poner A.");
+};
+map.on("click", e=>{
+  const p=[e.latlng.lat, e.latlng.lng];
+  if (cellPicking){
+    cellPicking=false; map.getContainer().classList.remove("cellpick");
+    if (!canHelp(1) || game.done) return say("No te alcanzan los intentos para consultar.", true);
+    charge(1); $("helpAnswer").insertAdjacentHTML("afterbegin", planoCard(p)); refreshHelpOpts(); openOverlay("helpOverlay");
+    return say(`Consultaste el plano ${planoOf(p)}.`);
+  }
+  if (!picking) return;
+  if (picking.step==="A"){ picking.A=p; picking.step="B"; pointsLayer.addLayer(L.marker(p,{icon:pinIcon("A",INK)})); return say("Ahora tocá para poner B."); }
+  const A=picking.A; picking=null; map.getContainer().classList.remove("cellpick");
+  startGame(A, p, "Punto del plano "+planoOf(A), "Punto del plano "+planoOf(p), "plano");
+});
+let tutoStep=0;
+const TUTO_KEY="comollego-tuto";
+const LEAVES=4;
+function showTuto(i){
+  tutoStep=i;
+  document.querySelectorAll("#book [data-leaf]").forEach(el=>{
+    const k=Number(el.dataset.leaf);
+    el.classList.toggle("turned", k<i);
+    el.style.zIndex = 10 + (LEAVES - k);
+    el.inert = k!==i;
+  });
+  document.querySelectorAll("#tutoOverlay .pips i").forEach((el,k)=>el.classList.toggle("on", k===i));
+  $("tutoNext").textContent = i===0 ? "Abrir" : i===LEAVES ? "¡A jugar!" : "Siguiente";
+}
+function openTuto(){ showTuto(0); openOverlay("tutoOverlay"); $("tutoNext").focus(); }
+function closeTuto(){ closeOverlay("tutoOverlay"); try { localStorage.setItem(TUTO_KEY,"1"); } catch {} if (!homeZone) openOverlay("homeOverlay"); }
+document.querySelector("#tutoOverlay .stars-demo").innerHTML = starsHTML(4);
+$("tutoNext").onclick=()=> tutoStep<LEAVES ? showTuto(tutoStep+1) : closeTuto();
+$("bookCover").onclick=()=>{ showTuto(1); $("tutoNext").focus(); };
+$("tutoSkip").onclick=closeTuto;
+(function tick(){ const d=new Date(); $("clock").textContent=d.toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"}); setTimeout(tick, 60000 - d.getSeconds()*1000); })();
+$("tutoBtn").onclick=openTuto;
+$("walkLbl").textContent=WALK+" m"; $("xferLbl").textContent=XFER+" m";
+$("dayBtn").onclick=dailyGame;
+$("homeBtn").onclick=homeGame;
+$("homeClose").onclick=()=>closeOverlay("homeOverlay");
+function homeMsg(t){ const m=$("homeMsg"); m.textContent=t; m.hidden=false; }
+$("homeOpts").addEventListener("click", e=>{
+  const b=e.target.closest("button[data-home]"); if (!b) return;
+  if (b.dataset.home!=="gps") return setHome(b.dataset.home);
+  if (!navigator.geolocation) return say("Este navegador no comparte la ubicación. Elegí tu zona a mano.", true);
+  b.disabled=true;
+  navigator.geolocation.getCurrentPosition(pos=>{
+    b.disabled=false;
+    const z=zoneOf(pos.coords.latitude, pos.coords.longitude);
+    if (z) return setHome(z);
+    const far = dist([pos.coords.latitude, pos.coords.longitude], [-34.6037,-58.3816]) > 60000;
+    homeMsg(far ? "Estás lejos de Buenos Aires. Elegí la zona que más conozcas o donde viviste; si no sabés, Capital es la más fácil."
+                : "Estás fuera de las zonas del juego. Elegí la más cercana.");
+  }, ()=>{ b.disabled=false; homeMsg("No pude saber tu ubicación. Elegí tu zona tocando uno de los botones."); },
+  { enableHighAccuracy:false, timeout:12000, maximumAge:600000 });
+});
+$("optDock").onclick=showOptimal;
+renderKeypad();
+if (homeZone && !loadSaved(dailyKey(todayNum())+"-"+homeZone)) homeGame(); else dailyGame();
+try { if (!localStorage.getItem(TUTO_KEY)) openTuto(); } catch {}
+drawGrid();
+</script>
+</body>
+</html>
