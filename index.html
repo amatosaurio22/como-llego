@@ -435,7 +435,11 @@
   .hintbtn svg { flex:none; width:26px; height:26px; }
   .hintbtn span { display:grid; gap:2px; }
   .hintbtn b { font:italic 700 15px/1.05 var(--title); letter-spacing:.01em; }
-  .hintbtn small { font:400 11.5px/1 var(--ui); color:#fff; }
+  .hintbtn small { font:400 11.5px/1.15 var(--ui); color:#fff; }
+  .hintbtn.giveup { border-color:#6e1a05; text-shadow:1px 1px 1px #5a1504;
+    background:linear-gradient(180deg, #cf4a22 0%, #c03c14 50%, #a8320f 90%, #8f2a0b 100%); }
+  .hintbtn.giveup:active { background:linear-gradient(180deg, #8f2a0b, #c03c14); }
+  .hintbtn.giveup.sure { outline:2px solid #ffd24a; outline-offset:-4px; }
   .gindex h3 { font:700 13px/1 var(--ui); letter-spacing:0; color:#215dc6; border-bottom:1px solid #b8c7e8; padding-bottom:5px; }
   .gcell { border-radius:3px; border:1px solid #9a9a8a; box-shadow:1px 1px 0 rgba(0,0,0,.18); }
   .gcell .num { font:700 20px/1.1 var(--ui); padding-right:20px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -1289,6 +1293,10 @@ function legSummaryHTML(){
 }
 function updateTries(){
   const left=game.maxTries-game.tries;
+  const hb=$("helpBtn"), out=!game.done && !canHelp(1);
+  hb.classList.toggle("giveup", out); hb.classList.remove("sure"); clearTimeout(hb._t);
+  hb.querySelector("b").textContent = out ? "Rendirse" : "¿Te trabaste? Pedí una pista";
+  hb.querySelector("small").textContent = out ? "Ya no alcanza para pistas: ver la óptima" : "Cuesta intentos";
   $("triesNow").textContent=`${game.tries}/${game.maxTries}`;
   $("triesTab").setAttribute("aria-label", `${game.tries} de ${game.maxTries} intentos usados`);
   $("triesTab").classList.toggle("low", left<=1 && !game.done);
@@ -1605,7 +1613,7 @@ function loseGame(){
   game.done=true; game.lost=true;
   $("winTitle").textContent="Boleto";
   $("winBody").innerHTML = `<div class="ticket">
-      <header><strong>Sin intentos</strong><span>${game.day?"#"+game.day:MODE_TITLE[game.mode]}</span></header>
+      <header><strong>${game.gaveUp ? "Te rendiste" : "Sin intentos"}</strong><span>${game.day?"#"+game.day:MODE_TITLE[game.mode]}</span></header>
       <p class="verdict" style="margin:0 0 10px">No llegaste. ${game.optRoute ? "Se podía así:" : ""}</p>
       ${game.optRoute ? routeHTML(game.optRoute.map(i=>LINES[i])) : ""}
       ${trailHTML()}
@@ -1903,6 +1911,14 @@ function nearCard(which){
 const remainingHints = () => game.optRoute ? game.optRoute.filter(i=>!game.thrown.includes(LINES[i]) && !game.revealed.has(i)) : [];
 $("helpBtn").onclick=()=>{
   if (game.done) return say("El viaje terminó. Empezá otro para pedir pistas.");
+  if (!canHelp(1)){
+    const hb=$("helpBtn");
+    if (!hb.classList.contains("sure")){
+      hb.classList.add("sure"); hb.querySelector("b").textContent="¿Te rendís?"; hb.querySelector("small").textContent="Tocá de nuevo para ver la ruta óptima";
+      clearTimeout(hb._t); hb._t=setTimeout(updateTries, 4000); return;
+    }
+    game.gaveUp=true; loseGame(); return say("Te rendiste. Mirá la ruta óptima en el plano.");
+  }
   refreshHelpOpts();
   if (!canHelp(1)) say("Te queda un solo intento: no alcanza para pedir una pista.", true);
   openOverlay("helpOverlay");
