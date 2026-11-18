@@ -875,6 +875,9 @@ function makeZone(A,B){
            pad:Math.max(5000,.5*L), w:Math.max(4000,.5*L), clip:new Map(), neigh:new Map() };
 }
 function inZone(p){
+  return true;
+}
+function inCorridor(p){
   if (!zone) return true;
   const x=(p[1]-zone.A[1])*111320*COSLAT, y=(p[0]-zone.A[0])*111320;
   const t=x*zone.ux+y*zone.uy, d=Math.abs(x*zone.uy-y*zone.ux);
@@ -1372,11 +1375,12 @@ function throwLine(){
   drawLine(line);
   $("lineInput").value=""; updateMatch();
   const links=describeLinks(line);
-  say(!clip(line).stops.length ? `${line.name} no pasa cerca de A ni de B.` :
+  const lejos = [game.A, game.B].every(p=>(nearestStop(line,p)?.d ?? Infinity) > WALK);
+  say(lejos && !links.length ? `${line.name} no pasa cerca de A ni de B, ni combina con lo que tiraste.` :
       `${line.name} ${MARK_SAY[m]}. ` + (links.length ? (j=>j[0].toUpperCase()+j.slice(1))(links.join(", "))+"." : "Todavía no toca nada."));
   refreshLinks(); refreshDots(); checkWin(); render(); updateTries();
   if (!game.done && game.tries>=game.maxTries) return loseGame();
-  if (!game.done && clip(line).stops.length){
+  if (!game.done && !(lejos && !links.length)){
     const { adj }=buildGraph(), miss=[];
     if (!adj.get("A").length) miss.push("A"); if (!adj.get("B").length) miss.push("B");
     say($("status").textContent+" Falta "+(miss.length ? "llegar a "+miss.join(" y a ") : "unir los recorridos")+".");
