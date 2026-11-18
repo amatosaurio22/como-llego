@@ -153,8 +153,10 @@
   .legend i { display:inline-block; width:9px; height:9px; border-radius:2px; border:1.5px solid var(--ink); margin-right:4px; vertical-align:-1px; }
   .gcell .rm { position:absolute; right:4px; bottom:4px; width:26px; height:26px; border-radius:6px; display:grid; place-items:center; color:var(--ink-2); }
   .gcell .rm:hover { background:var(--ground); }
-  .gcell .meta.walk { margin-top:2px; white-space:nowrap; }
-  .gcell .meta .far { color:#b8300c; font-weight:700; }
+  .gcell .meta.walk { margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .gcell .meta.walk b { display:inline-grid; place-items:center; width:13px; height:13px; margin-right:3px; border-radius:50%; color:#fff; background:#0f1f5c; font:700 9px/1 var(--ui); vertical-align:0; }
+  .gcell .meta.walk.kB b { background:#c43c12; }
+  .gcell .meta.walk.far { color:#b8300c; font-weight:700; }
   .gcell .rm svg { width:12px; height:12px; }
   .empty { font:500 14px/1.4 var(--px); color:var(--ink-2); margin:0; }
   .credits { margin:0; font:600 12px/1.45 var(--round); color:var(--ink-2); }
@@ -1076,6 +1078,7 @@ map.getPane("grid").style.mixBlendMode = "multiply";
 const gridRenderer = L.svg({ pane:"grid" });
 const gridLayer = L.layerGroup().addTo(map);
 const linesLayer = L.layerGroup().addTo(map);
+const nearLayer = L.layerGroup().addTo(map);
 const optLayer = L.layerGroup().addTo(map);
 const winLayer = L.layerGroup().addTo(map);
 const linksLayer = L.layerGroup().addTo(map);
@@ -1116,7 +1119,7 @@ const MODE_TITLE = { dia:"Desafío diario", libre:"Libre", aca:"Desde donde esto
 let lastMode="libre";
 function startGame(A, B, nameA, nameB, mode="libre", day=0, zone=null, leg=0){
   $("pickBtn").classList.remove("nudge"); $("newTrip").hidden=true;
-  for (const l of [linesLayer,linksLayer,pointsLayer,winLayer,optLayer]) l.clearLayers();
+  for (const l of [linesLayer,nearLayer,linksLayer,pointsLayer,winLayer,optLayer]) l.clearLayers();
   cellPicking=false; picking=null; map.getContainer().classList.remove("cellpick");
   const route = optimalRoute(A,B), dist = lineDistances(A,B);
   const optimal = route ? route.length : Infinity;
@@ -1386,13 +1389,18 @@ function drawLine(line){
     g.addLayer(L.polyline(p, { color:line.color, weight:big?4:3, opacity:1 }).bindTooltip(line.name, { sticky:true }));
   }
   if (big) for (const st of c.stops) g.addLayer(L.circleMarker(st, { radius:2.6, color:line.color, weight:1.5, fillColor:"#fff", fillOpacity:1, interactive:false }));
-  for (const [k,p] of [["A",game.A],["B",game.B]]){
-    const n=nearestStop(line, p); if (!n) continue;
-    const far=n.d>WALK, tip=`${shortName(line)} · parada más cercana a ${k}: ${fmtDist(n.d)} a pie${far?` (muy lejos: máx. ${WALK} m)`:""}`;
-    if (n.d<=1500) g.addLayer(L.polyline([p, n.stop], { color:far?"#c93a12":"#333", weight:2, opacity:.85, dashArray:"2 5", interactive:false }));
-    g.addLayer(L.circleMarker(n.stop, { radius:6, color:far?"#c93a12":"#111", weight:2, fillColor:line.color, fillOpacity:1 }).bindTooltip(tip));
-  }
   g.addTo(linesLayer); game.layers.set(line.idx, g);
+}
+function refreshNear(){
+  nearLayer.clearLayers();
+  if (game.done) return;
+  for (const line of game.thrown) for (const [k,p] of [["A",game.A],["B",game.B]]){
+    const n=nearestStop(line, p); if (!n) continue;
+    const far=n.d>WALK; if (far && game.reached[k]) continue;
+    const tip=`${shortName(line)} · parada más cercana a ${k}: ${fmtDist(n.d)} a pie${far?` (muy lejos: máx. ${WALK} m)`:""}`;
+    if (n.d<=1500) nearLayer.addLayer(L.polyline([p, n.stop], { color:far?"#c93a12":"#333", weight:2, opacity:.85, dashArray:"2 5", interactive:false }));
+    nearLayer.addLayer(L.circleMarker(n.stop, { radius:6, color:far?"#c93a12":"#111", weight:2, fillColor:line.color, fillOpacity:1 }).bindTooltip(tip));
+  }
 }
 function nearestStop(line, p){
   let best=null, bd=Infinity;
@@ -1456,7 +1464,9 @@ function refreshLinks(){
 }
 function refreshDots(){
   const { adj }=game.thrown.length ? buildGraph() : { adj:new Map([["A",[]],["B",[]]]) };
-  $("dotA").classList.toggle("on", adj.get("A").length>0); $("dotB").classList.toggle("on", adj.get("B").length>0);
+  game.reached={ A:adj.get("A").length>0, B:adj.get("B").length>0 };
+  $("dotA").classList.toggle("on", game.reached.A); $("dotB").classList.toggle("on", game.reached.B);
+  refreshNear();
   $("dotA").classList.toggle("blink", !!game.done); $("dotB").classList.toggle("blink", !!game.done);
 }
 (function xpScroll(){
@@ -1655,11 +1665,13 @@ function render(){
   const used=new Set(game.path||[]);
   $("thrown").innerHTML=game.thrown.map(l=>{
     const m=game.marks.get(l.idx)||"r";
-    const walk=k=>{ const n=nearestStop(l, k==="A"?game.A:game.B); return n ? `<span class="${n.d>WALK?"far":""}" title="Parada más cercana a ${k}">${k} ${fmtDist(n.d)}</span>` : ""; };
+    const walk=k=>{ const n=nearestStop(l, k==="A"?game.A:game.B); if (!n || (n.d>WALK && game.reached?.[k])) return "";
+      const txt = n.d<60 ? "la parada está ahí" : `parada a ${fmtDist(n.d)}`;
+      return `<div class="meta walk k${k}${n.d>WALK?" far":""}" title="Parada más cercana a ${k}${n.d>WALK?`: más de ${WALK} m, no se llega caminando`:""}"><b>${k}</b> ${txt}</div>`; };
     return `<div class="gcell ${m}${used.has(l.idx)?" used":""}"><span class="sw" style="background:${l.color}"></span>
       <div class="num${shortName(l).length>5?" long":""}">${shortName(l)}</div>
       <div class="meta">${kind(l)}</div>
-      <div class="meta walk">${walk("A")} · ${walk("B")}</div>
+      ${walk("A")}${walk("B")}
       <span class="mark">${MARK[m]}</span>
       <button class="rm" type="button" data-idx="${l.idx}" aria-label="Sacar ${l.name}"><svg><use href="#i-x"/></svg></button></div>`;
   }).join("");
@@ -1932,7 +1944,7 @@ function hereGame(){
 }
 function pickOnMap(){
   picking={ step:"A" }; map.getContainer().classList.add("cellpick");
-  for (const l of [pointsLayer,linesLayer,linksLayer,winLayer,optLayer]) l.clearLayers();
+  for (const l of [pointsLayer,linesLayer,nearLayer,linksLayer,winLayer,optLayer]) l.clearLayers();
   closeOverlay("winOverlay"); $("controls").hidden=false;
   say("Tocá el plano para poner A.");
 };
