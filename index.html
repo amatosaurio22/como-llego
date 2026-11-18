@@ -15,7 +15,7 @@
 <script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.1.3/leaflet-maplibre-gl.js"></script>
 <script src="data/rail.js?v=1794927508"></script>
 <script src="data/bus.js?v=1794930467" onerror="window.BUS_DATA=[]"></script>
-<script src="data/places.js?v=1794934288" onerror="window.PLACES_DATA=[]"></script>
+<script src="data/places.js?v=1795023076" onerror="window.PLACES_DATA=[]"></script>
 <script src="data/clubes.js?v=1795014774" onerror="window.CLUBES_DATA=[]"></script>
 <style>
   :root {
@@ -338,6 +338,12 @@
   .leg .w { flex:1; min-width:0; }
   .leg b { flex:none; font:700 14px/1 var(--ui); color:#d85f00; }
   .leg.tot { margin-top:4px; font-weight:700; } .leg.tot b { font-size:16px; }
+  .album { display:grid; gap:5px; padding:8px 10px; border:1px solid #7f9db9; background:#fff; }
+  .album-top { display:flex; justify-content:space-between; align-items:baseline; gap:8px; flex-wrap:wrap; font:400 12.5px/1.3 var(--ui); color:#000; }
+  .album-top > b { font:700 13px/1 var(--ui); color:#0a246a; }
+  .album-bar { height:12px; border:1px solid #686868; background:#fff; padding:1px; }
+  .album-bar i { display:block; height:100%; background:repeating-linear-gradient(90deg, #2fb33c 0 7px, transparent 7px 9px); }
+  .album-note { margin:10px 0 0; padding-top:8px; border-top:1.5px dashed rgba(18,35,94,.4); font:400 13px/1.35 var(--ui); }
   .rank-note { margin:10px 0 0; font:400 13px/1.35 var(--ui); }
   .rank-join { margin-top:10px; width:100%; justify-content:center; }
   .ttab.sube { position:relative; overflow:hidden; gap:7px; padding:0 34px 0 11px; text-decoration:none; color:#fff; border-color:#3b3170;
@@ -609,6 +615,7 @@
   <section class="win help" role="dialog" aria-modal="true" aria-labelledby="pickTitle">
     <div class="bar"><button class="box" type="button" id="pickClose" aria-label="Cerrar"><svg><use href="#i-x"/></svg></button><span class="chips" aria-hidden="true"><i></i><i></i><i></i><i></i></span><h2 id="pickTitle">Viajes</h2></div>
     <div class="body" id="pickOpts">
+      <div id="albumBox"></div>
       <p class="hint">Capital y La Plata: viajes adentro. Las zonas del conurbano también van y vienen de Capital.</p>
       <div class="zones">
         <button class="zone" type="button" data-pick="capital">Capital</button>
@@ -786,6 +793,7 @@
     <div class="modes rtabs" id="rankTabs" role="tablist">
       <button type="button" role="tab" data-tab="hoy">Hoy</button>
       <button type="button" role="tab" data-tab="racha">Rachas</button>
+      <button type="button" role="tab" data-tab="viajes">+ Viajes</button>
       <button type="button" role="tab" data-tab="ficha">Mi ficha</button>
     </div>
     <div class="body" id="rankBody"></div>
@@ -1187,7 +1195,43 @@ async function dailyGame(){
     const pts = await loadChallenge(n);
     daily = { n, pts, rec: loadSaved(D3KEY(n)) || { legs:[] } };
   }
-  startLeg(daily.rec.complete ? 0 : daily.rec.legs.length);
+  if (daily.rec.complete){ if (!game) randomGame(); return showDailyDone(); }
+  startLeg(daily.rec.legs.length);
+}
+function msToNext(){ const now=Date.now(), ba=new Date(now-3*3600e3); return Date.UTC(ba.getUTCFullYear(),ba.getUTCMonth(),ba.getUTCDate()+1)+3*3600e3-now; }
+let nextTimer=0;
+function tickNext(){
+  const el=$("nextIn"); if (!el || $("winOverlay").hidden){ clearInterval(nextTimer); return; }
+  const m=Math.max(0,Math.ceil(msToNext()/60000)), h=Math.floor(m/60);
+  el.textContent = h ? `${h} h ${m%60} min` : `${m} min`;
+  if (msToNext()<=0){ clearInterval(nextTimer); daily=null; el.closest(".verdict").textContent="¡Ya está el desafío nuevo!"; }
+}
+function practiceHTML(){
+  return `<p class="rank-note">Mañana hay desafío nuevo: faltan <b id="nextIn"></b>. Mientras tanto podés practicar con <b>+ Viajes</b> (no cuenta para el ranking).</p>
+    <div class="row"><button class="btn wide" type="button" id="practiceBtn"><svg><use href="#d-new"/></svg>Practicar en + Viajes</button></div>`;
+}
+function wireDaily(){
+  const on=(id,f)=>{ const b=$(id); if (b) b.onclick=f; };
+  on("shareBtn", shareDaily); on("rankOpen", ()=>{ closeOverlay("winOverlay"); openRank("hoy"); });
+  on("rankJoin", ()=>{ closeOverlay("winOverlay"); openRank("ficha"); });
+  on("practiceBtn", ()=>{ closeOverlay("winOverlay"); $("pickBtn").click(); });
+  clearInterval(nextTimer); tickNext(); nextTimer=setInterval(tickNext, 20000);
+}
+function showDailyDone(){
+  $("winTitle").textContent="Desafío diario";
+  $("winBody").innerHTML = `<div class="ticket">
+      <header><strong>Ya lo jugaste</strong><span>#${daily.n}</span></header>
+      ${legSummaryHTML()}
+    </div>
+    <div class="row">
+      <button class="btn hot wide" type="button" id="shareBtn">Compartir resultado</button>
+      <button class="btn" type="button" id="rankOpen"><svg><use href="#d-rank"/></svg>Ranking</button>
+    </div>
+    ${practiceHTML()}
+    ${profile ? "" : rankPromptHTML()}
+    ${subeHTML()}`;
+  openOverlay("winOverlay"); wireDaily();
+  say(`Ya jugaste el desafío diario #${daily.n} (${daily.rec.stars} de ${LEGS*5} estrellas). Practicá con + Viajes.`);
 }
 function startLeg(i){
   const a=daily.pts[i], b=daily.pts[i+1];
@@ -1475,6 +1519,11 @@ function finish(res){
   if (game.saveKey && !loadSaved(game.saveKey)){
     try { localStorage.setItem(game.saveKey, JSON.stringify({ ...res, tries:game.tries, max:game.maxTries, trail:game.trail.join("") })); } catch {}
   }
+  if (game.mode!=="dia" && res.won && !game.counted){
+    game.counted=true;
+    const nuevos=albumAdd(), t=$("winBody").querySelector(".ticket");
+    t && t.insertAdjacentHTML("beforeend", `<p class="album-note">${nuevos.length ? `<b>+${nuevos.length} lugar${nuevos.length>1?"es":""} nuevo${nuevos.length>1?"s":""}:</b> ${nuevos.map(esc).join(" y ")}.` : "Ya conocías estos lugares."} Conocés ${fmtN(album.size)} de ${fmtN(PLACE_NAMES.size)}.</p>`);
+  }
   if (game.mode==="dia"){
     const isNew=recordLeg(res);
     const t=$("winBody").querySelector(".ticket");
@@ -1482,7 +1531,7 @@ function finish(res){
     if (game.leg===LEGS-1 && daily.rec.complete){
       t.insertAdjacentHTML("beforeend", legSummaryHTML());
       if (isNew) onDailyComplete();
-      $("winBody").querySelector(".subebtn").insertAdjacentHTML("beforebegin", rankPromptHTML());
+      $("winBody").querySelector(".subebtn").insertAdjacentHTML("beforebegin", practiceHTML()+rankPromptHTML());
     }
   }
   openOverlay("winOverlay");
@@ -1492,6 +1541,7 @@ function finish(res){
   on("optBtn", ()=>{ closeOverlay("winOverlay"); showOptimal(); });
   on("shareBtn", share); on("rankOpen", ()=>{ closeOverlay("winOverlay"); openRank("hoy"); });
   on("rankJoin", ()=>{ closeOverlay("winOverlay"); openRank("ficha"); });
+  if (game.mode==="dia" && daily.rec.complete) wireDaily();
   refreshDots(); render(); updateTries();
 }
 function loseGame(){
@@ -1509,7 +1559,11 @@ function loseGame(){
   say("Te quedaste sin intentos. Mirá la ruta óptima en el plano.");
 }
 async function share(){
-  if (game.mode==="dia" && daily.rec.complete){
+  if (game.mode==="dia" && daily.rec.complete) return shareDaily();
+  return shareGame();
+}
+async function shareDaily(){
+  {
     const r=daily.rec, text=`Guiame #${daily.n} · ${LEGS} tramos\n${r.legs.map(l=>[...l.trail].map(m=>EMOJI[m]).join("")+(l.won?"":" ❌")).join("\n")}\n${r.stars}/${LEGS*5} ⭐ · ${r.tries} intentos\n${location.origin}${location.pathname}`;
     try {
       if (navigator.share && matchMedia("(pointer:coarse)").matches) await navigator.share({ text });
@@ -1517,6 +1571,8 @@ async function share(){
     } catch {}
     return;
   }
+}
+async function shareGame(){
   const head = game.mode==="dia" ? `Guiame #${game.day}` : game.mode==="barrio" ? `Guiame #${game.day} · ${MODE_TITLE[game.zone]}` : `Guiame (${MODE_TITLE[game.mode]})`;
   const r=game.result, res = r.won ? starRow(r.stars) : "no llegué";
   const text = `${head}\n${game.nameA} → ${game.nameB}\n${game.trail.map(m=>EMOJI[m]).join("")} ${game.tries}/${game.maxTries} · ${res}\n${location.origin}${location.pathname}`;
@@ -1625,6 +1681,23 @@ async function loadChallenge(n){
   } catch {}
   return pickChain(seeded(n));
 }
+const ALBUM_KEY="comollego-lugares", VIAJES_KEY="comollego-viajes";
+const PLACE_NAMES=new Set(PLACES.map(p=>p[0]));
+let album=new Set(loadSaved(ALBUM_KEY)||[]), viajes=Number(localStorage.getItem(VIAJES_KEY))||0;
+const fmtN = n => n.toLocaleString("es-AR");
+function albumAdd(){
+  const nuevos=[...new Set([game.nameA, game.nameB])].filter(n=>PLACE_NAMES.has(n) && !album.has(n));
+  nuevos.forEach(n=>album.add(n)); viajes++;
+  try { localStorage.setItem(ALBUM_KEY, JSON.stringify([...album])); localStorage.setItem(VIAJES_KEY, String(viajes)); } catch {}
+  pushProfile();
+  return nuevos;
+}
+function albumHTML(){
+  const pct=Math.max(album.size ? 1 : 0, Math.round(album.size/PLACE_NAMES.size*100));
+  return `<div class="album"><div class="album-top"><b>Tu álbum</b><span>Conocés <b>${fmtN(album.size)}</b> de ${fmtN(PLACE_NAMES.size)} lugares · ${fmtN(viajes)} viaje${viajes===1?"":"s"}</span></div>
+    <div class="album-bar" role="progressbar" aria-valuemin="0" aria-valuemax="${PLACE_NAMES.size}" aria-valuenow="${album.size}" aria-label="Lugares conocidos"><i style="width:${pct}%"></i></div></div>`;
+}
+function playerDoc(fs, who){ const st=streakInfo(); return { ...who, streak:st.streak, best:st.best, last:st.last, lugares:album.size, viajes, ts:fs.serverTimestamp() }; }
 async function pushScore(){
   const r=daily && daily.rec;
   if (!profile || !r || !r.complete || r.sent) return;
@@ -1635,12 +1708,12 @@ async function pushScore(){
       { ...who, stars:r.stars, tries:r.tries, pts:r.stars*100+(LEGS*MAX_TRIES-r.tries), ts:fs.serverTimestamp() });
     r.sent=true; try { localStorage.setItem(D3KEY(daily.n), JSON.stringify(r)); } catch {}
   } catch {}
-  try { await fs.setDoc(fs.doc(db, "players", uid), { ...who, streak:st.streak, best:st.best, last:st.last, ts:fs.serverTimestamp() }); } catch {}
+  try { await fs.setDoc(fs.doc(db, "players", uid), playerDoc(fs, who)); } catch {}
 }
 async function pushProfile(){
   const fb=await fbAuth(); if (!fb || !profile) return;
-  const { fs, db, uid }=fb, st=streakInfo(), who={ name:profile.name, zona:profile.zona, club:profile.club||"" };
-  try { await fs.setDoc(fs.doc(db, "players", uid), { ...who, streak:st.streak, best:st.best, last:st.last, ts:fs.serverTimestamp() }); } catch {}
+  const { fs, db, uid }=fb, who={ name:profile.name, zona:profile.zona, club:profile.club||"" };
+  try { await fs.setDoc(fs.doc(db, "players", uid), playerDoc(fs, who)); } catch {}
   if (daily && daily.rec.sent) try { await fs.updateDoc(fs.doc(db, "daily", String(daily.n), "scores", uid), who); } catch {}
 }
 function onDailyComplete(){ streakInfo(); pushScore(); }
@@ -1663,7 +1736,8 @@ async function renderRank(){
     const r=loadSaved(D3KEY(n)), st=streakInfo();
     box.innerHTML = `<p class="hint">El ranking online todavía no está conectado. Por ahora ves solo lo tuyo.</p><ol class="rlist">${
       rankTab==="hoy" ? (r && r.complete ? rowHTML(0, me, `${r.stars}★ <small>${r.tries} int.</small>`, true) : `<li class="rempty">Todavía no completaste el desafío #${n}.</li>`)
-                      : rowHTML(0, me, `${st.streak} <small>día${st.streak===1?"":"s"}</small>`, true)}</ol>`;
+      : rankTab==="viajes" ? rowHTML(0, me, `${fmtN(album.size)} <small>lugares</small>`, true)
+      : rowHTML(0, me, `${st.streak} <small>día${st.streak===1?"":"s"}</small>`, true)}</ol>`;
     return;
   }
   box.innerHTML = `<p class="hint">Cargando…</p>`;
@@ -1677,6 +1751,11 @@ async function renderRank(){
       list.sort((a,b)=>b.pts-a.pts || (a.ts?.seconds||0)-(b.ts?.seconds||0));
       box.innerHTML = `<p class="hint">Desafío #${n}: estrellas de los ${LEGS} tramos; si empatan, gana el de menos intentos.</p>
         <ol class="rlist">${list.length ? list.map((e,i)=>rowHTML(i, e, `${e.stars}★ <small>${e.tries} int.</small>`, e.id===uid)).join("") : `<li class="rempty">Nadie completó el desafío de hoy todavía. ¡Sé el primero!</li>`}</ol>`;
+    } else if (rankTab==="viajes"){
+      const q=fs.query(fs.collection(db, "players"), fs.orderBy("lugares","desc"), fs.limit(50));
+      const list=(await fs.getDocs(q)).docs.map(d=>({ id:d.id, ...d.data() })).filter(e=>e.lugares>0);
+      box.innerHTML = `${albumHTML()}<p class="hint">Quién conoce más lugares del AMBA jugando + Viajes y Tu zona.</p>
+        <ol class="rlist">${list.length ? list.map((e,i)=>rowHTML(i, e, `${fmtN(e.lugares)} <small>lugares · ${fmtN(e.viajes||0)} viajes</small>`, e.id===uid)).join("") : `<li class="rempty">Todavía nadie juntó lugares. ${profile ? "" : "Armá tu ficha para aparecer."}</li>`}</ol>`;
     } else {
       const q=fs.query(fs.collection(db, "players"), fs.orderBy("streak","desc"), fs.limit(80));
       const list=(await fs.getDocs(q)).docs.map(d=>({ id:d.id, ...d.data() })).filter(e=>e.streak>0 && e.last>=n-1).slice(0,50);
@@ -1780,7 +1859,7 @@ $("helpOpts").addEventListener("click", e=>{
   }
   refreshHelpOpts();
 });
-$("pickBtn").onclick=()=>openOverlay("pickOverlay");
+$("pickBtn").onclick=()=>{ $("albumBox").innerHTML=albumHTML(); openOverlay("pickOverlay"); };
 $("pickClose").onclick=()=>closeOverlay("pickOverlay");
 $("pickOpts").addEventListener("click", e=>{
   const b=e.target.closest("button[data-pick]"); if (!b) return;
