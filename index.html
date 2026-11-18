@@ -454,6 +454,11 @@
   .dock button:hover { background:linear-gradient(180deg, #2d69e0 0%, #2f6ce4 50%, #2a63d8 100%); box-shadow:inset 1px 1px rgba(255,255,255,.6), inset 0 2px rgba(150,190,255,.8); }
   .dock button[aria-pressed="true"] { background:#1e52b7; box-shadow:inset 1px 1px 2px rgba(0,0,0,.5); }
   .dock button[disabled] { opacity:.55; }
+  .newtrip { width:100%; margin:4px 0 12px; }
+  .newtrip[hidden] { display:none; }
+  .dock button.nudge { animation:dock-flash 1.1s steps(1) infinite; }
+  @keyframes dock-flash { 0%,45% { background:linear-gradient(180deg, #f8b25a 0%, #ee8a1e 55%, #d9720c 100%); box-shadow:inset 1px 1px rgba(255,255,255,.55), inset -1px -1px rgba(0,0,0,.3); text-shadow:0 1px 1px rgba(90,40,0,.6); } }
+  @media (prefers-reduced-motion: reduce) { .dock button.nudge { animation:none; background:linear-gradient(180deg, #f8b25a 0%, #ee8a1e 55%, #d9720c 100%); } }
   .dock svg { width:26px; height:26px; flex:none; overflow:visible; }
   .dock .tray { display:none; margin-left:auto; align-self:stretch; align-items:center; padding:0 14px; color:#fff; font:400 13px/1 var(--ui);
     background:linear-gradient(180deg, #0c59b9 1%, #139ee9 6%, #18b5f2 10%, #139beb 14%, #1290e8 19%, #0d8dea 63%, #0d9ff1 81%, #0f9eed 88%, #119be9 91%, #1392e2 94%, #137ed7 97%, #095bc9 100%);
@@ -591,6 +596,8 @@
         <div class="keypad" id="keypad" style="margin-top:9px"></div>
         <button type="button" id="helpBtn" class="hintbtn"><svg aria-hidden="true"><use href="#d-guide"/></svg><span><b>¿Te trabaste? Pedí una pista</b><small>Cuesta intentos</small></span></button>
       </div>
+
+      <button class="btn hot newtrip" type="button" id="newTrip" hidden>Nuevo viaje</button>
 
       <div class="gindex">
         <h3><span>Líneas tiradas</span><span id="count">0</span></h3>
@@ -1108,6 +1115,7 @@ const MODE_TITLE = { dia:"Desafío diario", libre:"Libre", aca:"Desde donde esto
   capital:"Capital", norte:"Zona Norte", noroeste:"Noroeste", oeste:"Zona Oeste", sur:"Zona Sur", laplata:"La Plata" };
 let lastMode="libre";
 function startGame(A, B, nameA, nameB, mode="libre", day=0, zone=null, leg=0){
+  $("pickBtn").classList.remove("nudge"); $("newTrip").hidden=true;
   for (const l of [linesLayer,linksLayer,pointsLayer,winLayer,optLayer]) l.clearLayers();
   cellPicking=false; picking=null; map.getContainer().classList.remove("cellpick");
   const route = optimalRoute(A,B), dist = lineDistances(A,B);
@@ -1573,6 +1581,11 @@ function finish(res){
   on("rankJoin", ()=>{ closeOverlay("winOverlay"); openRank("ficha"); });
   if (game.mode==="dia" && daily.rec.complete) wireDaily();
   refreshDots(); render(); updateTries();
+  const moreLegs = game.mode==="dia" && !daily.rec.complete;
+  if (!moreLegs) $("pickBtn").classList.add("nudge");
+  const nt=$("newTrip"); nt.hidden=false;
+  nt.textContent = moreLegs ? `Siguiente tramo: ${daily.pts[game.leg+1][0]} → ?` : "Nuevo viaje";
+  nt.onclick = moreLegs ? ()=>{ closeOverlay("winOverlay"); startLeg(game.leg+1); } : ()=>{ closeOverlay("winOverlay"); randomGame(); };
 }
 function loseGame(){
   game.done=true; game.lost=true;
@@ -1890,7 +1903,7 @@ $("helpOpts").addEventListener("click", e=>{
   }
   refreshHelpOpts();
 });
-$("pickBtn").onclick=()=>{ $("albumBox").innerHTML=albumHTML(); openOverlay("pickOverlay"); };
+$("pickBtn").onclick=()=>{ $("pickBtn").classList.remove("nudge"); $("albumBox").innerHTML=albumHTML(); openOverlay("pickOverlay"); };
 $("pickClose").onclick=()=>closeOverlay("pickOverlay");
 $("pickOpts").addEventListener("click", e=>{
   const b=e.target.closest("button[data-pick]"); if (!b) return;
