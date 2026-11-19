@@ -208,6 +208,7 @@
   .zones { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
   .zone { min-height:42px; padding:4px 6px; border:1.5px solid var(--ink); border-radius:9px; background:#fff; font:600 14px/1.15 var(--round); }
   .zone:hover { background:#eef3fb; }
+  .hint.now { font-weight:700; }
   .hint.small { font-size:12px; color:var(--ink-2); }
   .sr { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
   .book-ov { background:rgba(18,35,94,.42); overflow:hidden; }
@@ -404,6 +405,7 @@
   .btn:active, .key:active, .zone:active, .help .opt:active {
     background:linear-gradient(180deg, #cdcac3 0%, #e3e3db 8%, #e5e5de 94%, #f2f2f1 100%) !important; box-shadow:none !important; transform:none; }
   .key { font:400 22px/1 var(--ui); }
+  .zones .zone.on { background:linear-gradient(180deg,#3a72d8,#1a4aa6) !important; color:#fff !important; border-color:#0b2a6e !important; font-weight:700; }
   .key.small { font:400 13px/1.1 var(--ui); }
   .key.sub { display:grid; place-items:center; }
   .sbt { width:32px; height:32px; border-radius:50%; display:grid; place-items:center; background:var(--c); color:#fff; font:700 18px/1 Arial, Helvetica, sans-serif; box-shadow:inset 0 -2px rgba(0,0,0,.18), 0 0 0 1.5px rgba(255,255,255,.9), 0 1px 2px rgba(0,0,0,.35); text-shadow:0 1px 0 rgba(0,0,0,.2); }
@@ -671,6 +673,7 @@
   <section class="win help" role="dialog" aria-modal="true" aria-labelledby="homeTitle">
     <div class="bar"><button class="box" type="button" id="homeClose" aria-label="Cerrar"><svg><use href="#i-x"/></svg></button><span class="chips" aria-hidden="true"><i></i><i></i><i></i><i></i></span><h2 id="homeTitle">¿Dónde vivís?</h2></div>
     <div class="body" id="homeOpts">
+      <p class="hint now" id="homeNow" hidden></p>
       <p class="hint">Todos los días vas a tener un viaje de tu zona, el mismo para todos tus vecinos. Además está el desafío diario, igual para todo el AMBA.</p>
       <div class="zones">
         <button class="zone" type="button" data-home="capital">Capital</button>
@@ -1136,7 +1139,7 @@ function startGame(A, B, nameA, nameB, mode="libre", day=0, zone=null, leg=0){
   if (mode!=="dia" && mode!=="barrio") lastMode=mode;
   const title = gameTitle();
   $("consoleTitle").textContent=title; $("modeTag").textContent = day ? "#"+day+(mode==="dia" ? ` · ${leg+1}/${LEGS}` : "") : "";
-  $("homeBtn").setAttribute("aria-pressed", mode==="barrio"); $("dayBtn").setAttribute("aria-pressed", mode==="dia");
+  $("homeBtn").setAttribute("aria-pressed", mode==="barrio"); $("homeBtn").lastChild.textContent = mode==="barrio" ? "Cambiar zona" : "Tu zona"; $("dayBtn").setAttribute("aria-pressed", mode==="dia");
   $("pickBtn").setAttribute("aria-pressed", mode!=="dia" && mode!=="barrio");
   $("nameA").textContent=nameA; $("nameB").textContent=nameB;
   $("planoA").textContent="plano "+planoOf(A); $("planoB").textContent="plano "+planoOf(B);
@@ -1215,9 +1218,18 @@ function zoneOf(lat, lon){
   for (const z of ["norte","noroeste","oeste","sur"]) if (inBox(p, ZONES[z])) return z;
   return null;
 }
+function openHome(){
+  const now=$("homeNow");
+  now.hidden=!homeZone;
+  if (homeZone) now.textContent=`Ahora jugás en ${MODE_TITLE[homeZone]}. Tocá otra para cambiarla.`;
+  $("homeTitle").textContent = homeZone ? "Tu zona" : "¿Dónde vivís?";
+  for (const b of $("homeOpts").querySelectorAll("button[data-home]")) b.classList.toggle("on", b.dataset.home===homeZone);
+  $("homeMsg").hidden=true;
+  openOverlay("homeOverlay");
+}
 function setHome(z){ homeZone=z; try { localStorage.setItem(HOME_KEY, z); } catch {} closeOverlay("homeOverlay"); homeGame(); }
 function homeGame(){
-  if (!homeZone) return openOverlay("homeOverlay");
+  if (!homeZone) return openHome();
   const n=todayNum(), [a,b]=zonePair(homeZone, seeded(n*97+ZONE_KEYS.indexOf(homeZone)+13));
   startGame([a[1],a[2]],[b[1],b[2]], a[0], b[0], "barrio", n, homeZone);
 }
@@ -1943,7 +1955,7 @@ $("pickOpts").addEventListener("click", e=>{
   const k=b.dataset.pick;
   if (k==="here") return hereGame();
   if (k==="map") return pickOnMap();
-  if (k==="home") return openOverlay("homeOverlay");
+  if (k==="home") return openHome();
   zoneGame(k);
 });
 function hereGame(){
@@ -1996,7 +2008,7 @@ function showTuto(i){
   $("tutoNext").textContent = i===0 ? "Abrir" : i===LEAVES ? "¡A jugar!" : "Siguiente";
 }
 function openTuto(){ showTuto(0); openOverlay("tutoOverlay"); $("tutoNext").focus(); }
-function closeTuto(){ closeOverlay("tutoOverlay"); try { localStorage.setItem(TUTO_KEY,"1"); } catch {} if (!homeZone) openOverlay("homeOverlay"); }
+function closeTuto(){ closeOverlay("tutoOverlay"); try { localStorage.setItem(TUTO_KEY,"1"); } catch {} if (!homeZone) openHome(); }
 document.querySelector("#tutoOverlay .stars-demo").innerHTML = starsHTML(4);
 $("tutoNext").onclick=()=> tutoStep<LEAVES ? showTuto(tutoStep+1) : closeTuto();
 $("bookCover").onclick=()=>{ showTuto(1); $("tutoNext").focus(); };
@@ -2005,7 +2017,7 @@ $("tutoSkip").onclick=closeTuto;
 $("tutoBtn").onclick=openTuto;
 $("walkLbl").textContent=WALK+" m"; $("xferLbl").textContent=XFER+" m";
 $("dayBtn").onclick=dailyGame;
-$("homeBtn").onclick=homeGame;
+$("homeBtn").onclick=()=> game?.mode==="barrio" ? openHome() : homeGame();
 $("homeClose").onclick=()=>closeOverlay("homeOverlay");
 function homeMsg(t){ const m=$("homeMsg"); m.textContent=t; m.hidden=false; }
 $("homeOpts").addEventListener("click", e=>{
